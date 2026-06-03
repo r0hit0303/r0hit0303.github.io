@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebGPU adapter info test</title>
+    <meta charset="utf-8">
+  </head>
+  <body>
+    <p><b>navigator.gpu.requestAdapter({
+      featureLevel: 'compatibility',
+    }).requestDevice().adapterInfo</b></p>
+    <p id="device-adapter-info">loading...</p>
+    <script type="module">
+      window.gpuDeviceAdapterInfoPromise = (async () => {
+        if (!navigator.gpu) {
+          return 'no-gpu';
+        }
+        const adapter = await navigator.gpu.requestAdapter({
+          featureLevel: 'compatibility',
+        });
+        if (!adapter) {
+          return 'no-adapter';
+        }
+        const device = await adapter.requestDevice();
+        if (!device) {
+          return 'no-device';
+        }
+        const info = device.adapterInfo;
+        return info.vendor + ',' + info.architecture + ',' + info.device;
+      })();
+
+      const infoElement = document.getElementById("device-adapter-info");
+      try {
+        const result = await window.gpuDeviceAdapterInfoPromise;
+        infoElement.textContent = result;
+      } catch (error) {
+        infoElement.textContent = 'error: ' + error;
+      }
+    </script>
+
+<p><b>navigator.gpu.requestAdapter({
+  featureLevel: 'compatibility',
+}).info</b></p>
+<p id="adapter-info">loading...</p>
+<script type="module">
+  window.gpuAdapterInfoPromise = (async () => {
+    if (!navigator.gpu) {
+      return 'no-gpu';
+    }
+    const adapter = await navigator.gpu.requestAdapter({
+      featureLevel: 'compatibility',
+    });
+    if (!adapter) {
+      return 'no-adapter';
+    }
+    const info = adapter.info;
+    return info.vendor + ',' + info.architecture + ',' + info.device;
+  })();
+
+  const adapterInfo = document.getElementById("adapter-info");
+  try {
+    const result = await window.gpuAdapterInfoPromise;
+    adapterInfo.textContent = result;
+  } catch (error) {
+    adapterInfo.textContent = 'error: ' + error;
+  }
+</script>
+  </body>
+</html>
+
