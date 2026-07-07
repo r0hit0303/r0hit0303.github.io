@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data URI Farbling Bypass check</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      padding: 2rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 1.6rem; margin-bottom: 0.4rem; }
+
+    .breadcrumb {
+      font-size: 0.85rem;
+      color: #6c757d;
+      margin-bottom: 1.5rem;
+    }
+    .breadcrumb a { color: #0d6efd; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    p { margin-bottom: 1rem; line-height: 1.6; }
+
+    .how-it-works {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .how-it-works summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .how-it-works pre {
+      margin-top: 1rem;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 1rem 1.2rem;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+
+    .note {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+    .note strong { color: #856404; }
+
+    .tip {
+      background: #e8f4fd;
+      border: 1px solid #90caf9;
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+    .tip strong { color: #1565c0; }
+    .tip ol { margin: 0.5rem 0 0.5rem 1.4rem; }
+    .tip li { margin-bottom: 0.25rem; }
+
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      padding: 0.5rem 1.1rem;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: filter 0.1s;
+    }
+    button:hover { filter: brightness(0.92); }
+    button:active { filter: brightness(0.85); }
+
+    #btnRun    { background: #0d6efd; color: #fff; }
+    #btnShow   { background: #6c757d; color: #fff; }
+    #btnClear  { background: #e9ecef; color: #495057; }
+
+    #status {
+      font-size: 0.85rem;
+      color: #6c757d;
+      align-self: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      font-size: 0.88rem;
+    }
+    thead tr { background: #343a40; color: #fff; }
+    thead th { padding: 0.65rem 0.9rem; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: #f8f9fa; }
+    tbody tr:hover { background: #e9ecef; }
+    tbody td { padding: 0.55rem 0.9rem; border-bottom: 1px solid #dee2e6; font-family: monospace; }
+    tbody td:first-child { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 500; color: #495057; }
+    .match    { color: #198754; font-weight: 600; }
+    .mismatch { color: #dc3545; font-weight: 600; }
+
+    #dataUriBox {
+      display: none;
+      margin-top: 1.5rem;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+    }
+    #dataUriBox h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+    #dataUriBox textarea {
+      width: 100%;
+      height: 120px;
+      font-size: 0.78rem;
+      font-family: monospace;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      padding: 0.5rem;
+      resize: vertical;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+<div class="breadcrumb">← <a href="/">All tests</a></div>
+
+<h1>Data URI Farbling Bypass check</h1>
+
+<p>
+  Tests whether a <code>data:</code> URI loaded inside an <code>&lt;iframe&gt;</code> bypasses
+  browser fingerprint-farbling (e.g. Brave Shields). Click the button below. This will:
+</p>
+<ol style="margin: 0 0 1rem 1.5rem; line-height:2;">
+  <li>Read fingerprint-relevant values on <strong>this page</strong> (potentially farbled by Shields).</li>
+  <li>Build a <code>data:text/html,…</code> URI whose inline script reads the same values.</li>
+  <li>Load that URI in a hidden <code>&lt;iframe&gt;</code> — top-level navigation to <code>data:</code> is blocked in modern browsers.</li>
+  <li>The iframe relays its readings back via <code>postMessage</code> (localStorage is unavailable because <code>data:</code> URIs have a <strong>null origin</strong>).</li>
+  <li>This page compares both sets of values.</li>
+</ol>
+
+<div class="note">
+  <strong>Note:</strong> Unlike <code>blob:</code> URLs (which share the creator's origin),
+  <code>data:</code> URIs always have a <em>null</em> origin, so <code>localStorage</code>
+  and <code>BroadcastChannel</code> cannot be used for the relay — only <code>postMessage</code> works.
+</div>
+
+<div class="tip">
+  <strong>Tip — verify with Brave Shields:</strong> To see the true unfarbled values as a baseline,
+  try running this test twice:
+  <ol>
+    <li><strong>Shields UP</strong> (default) — run the test and note any mismatches.</li>
+    <li><strong>Shields DOWN</strong> — click the Brave lion icon in the address bar and toggle
+        Shields off, then reload the page and run the test again. With Shields down both columns
+        should show identical, real values, confirming what the farbled numbers are hiding.</li>
+  </ol>
+  A mismatch that disappears when Shields are down confirms the <code>data:</code> iframe is
+  reading through the farbling layer.
+</div>
+
+<p>
+  Based on the <a href="https://test-website-a.pages.dev/blob-farbling-bypass/" target="_blank" rel="noopener">Blob URL Farbling Bypass</a>
+  test — adapted to use <code>data:</code> URIs instead of <code>blob:</code> URLs.
+  Because top-level navigation to <code>data:</code> URIs is
+  <a href="https://blog.mozilla.org/security/2017/11/27/blocking-top-level-navigations-data-urls-firefox-59/" target="_blank" rel="noopener">blocked in modern browsers</a>,
+  the <code>data:</code> URI is loaded in a hidden <code>&lt;iframe&gt;</code> and results are
+  relayed back via <code>postMessage</code> rather than <code>localStorage</code>.
+</p>
+
+<div class="controls">
+  <button id="btnRun">Run Test</button>
+  <button id="btnShow">Show Data URI</button>
+  <button id="btnClear">Clear</button>
+  <span id="status"></span>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Main Page</th>
+      <th>data: iframe</th>
+      <th>Match?</th>
+    </tr>
+  </thead>
+  <tbody id="results">
+    <tr>
+      <td colspan="4" style="text-align:center; color:#6c757d; font-family:sans-serif;">
+        — run the test to see results —
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div id="dataUriBox">
+  <h3>Generated data: URI</h3>
+  <textarea id="dataUriText" readonly></textarea>
+</div>
+
+<details class="how-it-works">
+  <summary>How it works</summary>
+  <pre>
+// 1. Build an HTML document whose inline script reads fingerprint
+//    values and posts them to the parent via postMessage.
+//    (localStorage is unavailable — data: URIs have a null origin.)
+const innerDoc = `&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;body&gt;&lt;script&gt;
+  parent.postMessage({
+    type: 'farbling-result',
+    data: {
+      screen_width:        screen.width,
+      screen_height:       screen.height,
+      screen_availWidth:   screen.availWidth,
+      screen_availHeight:  screen.availHeight,
+      screen_availLeft:    screen.availLeft,
+      screen_availTop:     screen.availTop,
+      screenX:             screenX,
+      screenY:             screenY,
+      screen_colorDepth:   screen.colorDepth,
+      devicePixelRatio:    window.devicePixelRatio,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      deviceMemory:        navigator.deviceMemory,
+      canvas_fp:           getCanvasFp(),   // inline helper
+    }
+  }, '*');
+&lt;\/script&gt;&lt;/body&gt;&lt;/html&gt;`;
+
+// 2. Encode as a data: URI (top-level navigation is blocked, but
+//    iframes accept data: src just fine).
+const dataUri = 'data:text/html,' + encodeURIComponent(innerDoc);
+
+// 3. Inject a hidden iframe with that URI as its src.
+const iframe = document.createElement('iframe');
+iframe.src = dataUri;
+document.body.appendChild(iframe);
+
+// 4. Main page listens for the relayed values.
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'farbling-result') {
+    compareAndDisplay(mainPageValues, event.data.data);
+  }
+});
+  </pre>
+</details>
+
+<!-- Hidden iframe — injected dynamically by the script -->
+
+<script>
+  /* ── helpers ─────────────────────────────────────────── */
+
+  function getCanvasFp() {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 200; canvas.height = 50;
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20);
+      ctx.fillStyle = '#069';
+      ctx.fillText('BrowserLeaks,com <canvas>', 2, 15);
+      ctx.fillStyle = 'rgba(102,204,0,0.7)';
+      ctx.fillText('BrowserLeaks,com <canvas>', 4, 17);
+      return canvas.toDataURL().slice(-32); // last 32 chars as a short fingerprint
+    } catch (e) {
+      return 'error';
+    }
+  }
+
+  function readFingerprint() {
+    return {
+      screen_width:        screen.width,
+      screen_height:       screen.height,
+      screen_availWidth:   screen.availWidth,
+      screen_availHeight:  screen.availHeight,
+      screen_availLeft:    screen.availLeft  !== undefined ? screen.availLeft  : 'n/a',
+      screen_availTop:     screen.availTop   !== undefined ? screen.availTop   : 'n/a',
+      screenX:             screenX,
+      screenY:             screenY,
+      screen_colorDepth:   screen.colorDepth,
+      devicePixelRatio:    window.devicePixelRatio,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      deviceMemory:        navigator.deviceMemory !== undefined
+                             ? navigator.deviceMemory : 'n/a',
+      canvas_fp:           getCanvasFp(),
+    };
+  }
+
+  /* ── iframe source ────────────────────────────────────── */
+
+  // NOTE: we stringify the canvas helper and inject it so the
+  // data: iframe runs the exact same logic without any network fetch.
+  function buildInnerDoc() {
+    const canvasFnSrc = getCanvasFp.toString();
+    return `<!DOCTYPE html><html><body><script>
+function getCanvasFp() ${canvasFnSrc.slice(canvasFnSrc.indexOf('{'))}
+var data = {
+  screen_width:        screen.width,
+  screen_height:       screen.height,
+  screen_availWidth:   screen.availWidth,
+  screen_availHeight:  screen.availHeight,
+  screen_availLeft:    screen.availLeft  !== undefined ? screen.availLeft  : 'n/a',
+  screen_availTop:     screen.availTop   !== undefined ? screen.availTop   : 'n/a',
+  screenX:             screenX,
+  screenY:             screenY,
+  screen_colorDepth:   screen.colorDepth,
+  devicePixelRatio:    window.devicePixelRatio,
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  deviceMemory:        navigator.deviceMemory !== undefined ? navigator.deviceMemory : 'n/a',
+  canvas_fp:           getCanvasFp(),
+};
+parent.postMessage({ type: 'farbling-result', data: data }, '*');
+<\/script></body></html>`;
+  }
+
+  /* ── display ──────────────────────────────────────────── */
+
+  function displayResults(mainVals, iframeVals) {
+    const tbody = document.getElementById('results');
+    tbody.innerHTML = '';
+    let allMatch = true;
+    for (const key of Object.keys(mainVals)) {
+      const mv = mainVals[key];
+      const iv = iframeVals[key] !== undefined ? iframeVals[key] : 'n/a';
+      const match = String(mv) === String(iv);
+      if (!match) allMatch = false;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${key}</td>
+        <td>${mv}</td>
+        <td>${iv}</td>
+        <td class="${match ? 'match' : 'mismatch'}">${match ? '✓ Match' : '✗ Mismatch'}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+    setStatus(allMatch
+      ? '✓ All values match — no bypass detected'
+      : '✗ Values differ — possible farbling bypass via data: iframe');
+  }
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = msg;
+  }
+
+  /* ── test runner ──────────────────────────────────────── */
+
+  let currentIframe = null;
+  let messageHandler = null;
+
+  function runTest() {
+    setStatus('Running…');
+    document.getElementById('results').innerHTML =
+      '<tr><td colspan="4" style="text-align:center;color:#6c757d;font-family:sans-serif;">loading…</td></tr>';
+
+    const mainValues = readFingerprint();
+    const innerDoc   = buildInnerDoc();
+    const dataUri    = 'data:text/html,' + encodeURIComponent(innerDoc);
+
+    // Store URI for the "show" button
+    document.getElementById('dataUriText').value = dataUri;
+
+    // Remove any previous iframe + listener
+    if (currentIframe) currentIframe.remove();
+    if (messageHandler) window.removeEventListener('message', messageHandler);
+
+    messageHandler = function handler(event) {
+      if (event.data && event.data.type === 'farbling-result') {
+        window.removeEventListener('message', handler);
+        displayResults(mainValues, event.data.data);
+        // Keep iframe in DOM briefly so browser has time to deliver the message,
+        // then hide it.
+        setTimeout(() => { if (currentIframe) currentIframe.style.display = 'none'; }, 300);
+      }
+    };
+    window.addEventListener('message', messageHandler);
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'testFrame';
+    iframe.style.cssText = 'display:none;width:1px;height:1px;border:none;position:absolute;left:-9999px';
+    iframe.src = dataUri;
+    document.body.appendChild(iframe);
+    currentIframe = iframe;
+
+    // Timeout fallback — some browsers block data: iframes with scripts
+    setTimeout(() => {
+      if (document.getElementById('results').querySelector('td[colspan]')) {
+        setStatus('⚠ No response from data: iframe — scripts may be blocked by the browser.');
+        document.getElementById('results').innerHTML =
+          '<tr><td colspan="4" style="text-align:center;color:#dc3545;font-family:sans-serif;">' +
+          'data: iframe did not respond. The browser may have blocked its scripts.</td></tr>';
+      }
+    }, 3000);
+  }
+
+  /* ── button wiring ────────────────────────────────────── */
+
+  document.getElementById('btnRun').addEventListener('click', runTest);
+
+  document.getElementById('btnShow').addEventListener('click', () => {
+    const box = document.getElementById('dataUriBox');
+    if (!document.getElementById('dataUriText').value) {
+      // Generate without running so the user can inspect
+      const innerDoc = buildInnerDoc();
+      document.getElementById('dataUriText').value =
+        'data:text/html,' + encodeURIComponent(innerDoc);
+    }
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('btnClear').addEventListener('click', () => {
+    document.getElementById('results').innerHTML =
+      '<tr><td colspan="4" style="text-align:center;color:#6c757d;font-family:sans-serif;">' +
+      '— run the test to see results —</td></tr>';
+    setStatus('');
+    document.getElementById('dataUriBox').style.display = 'none';
+    document.getElementById('dataUriText').value = '';
+    if (currentIframe) { currentIframe.remove(); currentIframe = null; }
+  });
+</script>
+
+</body>
+</html>
