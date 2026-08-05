@@ -23,6 +23,15 @@
         font-size: 1.8rem;
       }
 
+      h2 {
+        margin: 32px 0 12px;
+        font-size: 1.25rem;
+      }
+
+      h2:first-of-type {
+        margin-top: 0;
+      }
+
       canvas {
         display: none;
       }
@@ -89,6 +98,9 @@
     <main>
       <h1>WebGL Info Test</h1>
       <canvas id="test" width="8" height="8"></canvas>
+      <canvas id="test2" width="8" height="8"></canvas>
+
+      <h2>WebGL</h2>
 
       <section>
         <p><b>gl.getSupportedExtensions()</b> <span class="count" id="supported-extensions-count">(loading...)</span></p>
@@ -109,18 +121,31 @@
         <p><b>gl.getParameter(gl.VENDOR) and gl.getParameter(gl.RENDERER)</b></p>
         <p class="result" id="standard-renderer-info">loading...</p>
       </section>
+
+      <h2>WebGL2</h2>
+
+      <section>
+        <p><b>gl2.getSupportedExtensions()</b> <span class="count" id="supported-extensions-count-2">(loading...)</span></p>
+        <p class="result" id="supported-extensions-2">loading...</p>
+      </section>
+
+      <section>
+        <p><b>gl2.getExtension(name) object for each supported extension</b></p>
+        <div class="result extension-list" id="available-extensions-2">loading...</div>
+      </section>
+
+      <section>
+        <p><b>gl2.getParameter(WEBGL_debug_renderer_info)</b></p>
+        <p class="result" id="renderer-info-2">loading...</p>
+      </section>
+
+      <section>
+        <p><b>gl2.getParameter(gl2.VENDOR) and gl2.getParameter(gl2.RENDERER)</b></p>
+        <p class="result" id="standard-renderer-info-2">loading...</p>
+      </section>
     </main>
 
     <script>
-      const canvas = document.getElementById("test");
-      const gl = canvas.getContext("webgl");
-
-      const supportedExtensionsElement = document.getElementById("supported-extensions");
-      const supportedExtensionsCountElement = document.getElementById("supported-extensions-count");
-      const availableExtensionsElement = document.getElementById("available-extensions");
-      const rendererInfoElement = document.getElementById("renderer-info");
-      const standardRendererInfoElement = document.getElementById("standard-renderer-info");
-
       const formatExtensionObject = (extension) => {
         if (!extension) {
           return "null";
@@ -143,13 +168,22 @@
         return extensionType + " { " + details.join(", ") + " }";
       };
 
-      if (!gl) {
-        supportedExtensionsCountElement.textContent = "(0 found)";
-        supportedExtensionsElement.textContent = "no-webgl";
-        availableExtensionsElement.textContent = "no-webgl";
-        rendererInfoElement.textContent = "no-webgl";
-        standardRendererInfoElement.textContent = "no-webgl";
-      } else {
+      const fillWebGLInfo = (gl, ids, unavailableLabel) => {
+        const supportedExtensionsElement = document.getElementById(ids.supportedExtensions);
+        const supportedExtensionsCountElement = document.getElementById(ids.supportedExtensionsCount);
+        const availableExtensionsElement = document.getElementById(ids.availableExtensions);
+        const rendererInfoElement = document.getElementById(ids.rendererInfo);
+        const standardRendererInfoElement = document.getElementById(ids.standardRendererInfo);
+
+        if (!gl) {
+          supportedExtensionsCountElement.textContent = "(0 found)";
+          supportedExtensionsElement.textContent = unavailableLabel;
+          availableExtensionsElement.textContent = unavailableLabel;
+          rendererInfoElement.textContent = unavailableLabel;
+          standardRendererInfoElement.textContent = unavailableLabel;
+          return;
+        }
+
         const supportedExtensions = gl.getSupportedExtensions() || [];
         supportedExtensionsCountElement.textContent = "(" + supportedExtensions.length + " found)";
         supportedExtensionsElement.textContent = supportedExtensions.join(", ");
@@ -181,7 +215,28 @@
         const standardVendor = gl.getParameter(gl.VENDOR);
         const standardRenderer = gl.getParameter(gl.RENDERER);
         standardRendererInfoElement.textContent = "Vendor: " + standardVendor + "\nRenderer: " + standardRenderer;
-      }
+      };
+
+      const canvas = document.getElementById("test");
+      const canvas2 = document.getElementById("test2");
+      const gl = canvas.getContext("webgl");
+      const gl2 = canvas2.getContext("webgl2");
+
+      fillWebGLInfo(gl, {
+        supportedExtensions: "supported-extensions",
+        supportedExtensionsCount: "supported-extensions-count",
+        availableExtensions: "available-extensions",
+        rendererInfo: "renderer-info",
+        standardRendererInfo: "standard-renderer-info",
+      }, "no-webgl");
+
+      fillWebGLInfo(gl2, {
+        supportedExtensions: "supported-extensions-2",
+        supportedExtensionsCount: "supported-extensions-count-2",
+        availableExtensions: "available-extensions-2",
+        rendererInfo: "renderer-info-2",
+        standardRendererInfo: "standard-renderer-info-2",
+      }, "no-webgl2");
     </script>
   </body>
 </html>
