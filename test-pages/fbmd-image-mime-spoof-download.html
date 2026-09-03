@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image IPTC metadata stripper download</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --maxw: 860px;
+      --radius: 14px;
+      --accent: #0066cc;
+      --line: rgba(127, 127, 127, 0.28);
+      --panel: rgba(127, 127, 127, 0.06);
+      --panel-strong: rgba(127, 127, 127, 0.1);
+      --code-bg: rgba(127, 127, 127, 0.14);
+      --ok: #1e8449;
+      --bad: #c0392b;
+      --compare-line: #e8a87c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --accent: #4ea1ff;
+        --ok: #4ade80;
+        --bad: #f87171;
+        --compare-line: #e8b48a;
+      }
+    }
+    body {
+      font-family: var(--font-sans);
+      line-height: 1.45;
+      margin: 0 auto;
+      padding: 18px;
+      max-width: var(--maxw);
+    }
+    h1 { font-size: 1.4em; margin: 0 0 8px; }
+    h2 { font-size: 1.15em; }
+    a { color: var(--accent); }
+    .home-link {
+      display: inline-block;
+      margin-bottom: 10px;
+      font-size: 0.9em;
+      text-decoration: none;
+      opacity: 0.7;
+    }
+    .home-link:hover { opacity: 1; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 14px 0;
+      background: var(--panel);
+    }
+    .card ol { margin: 0.4em 0 0 1.2em; padding: 0; }
+    .card li { margin: 0.55em 0; }
+    code {
+      font-family: var(--font-mono);
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+    a.btn {
+      display: inline-block;
+      font-size: 1em;
+      padding: 9px 20px;
+      cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+      color: inherit;
+      text-decoration: none;
+    }
+    a.btn:hover { background: var(--line); }
+    .compare {
+      border: 2px dashed var(--compare-line);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+      background: var(--panel-strong);
+    }
+    .compare h2 { margin-top: 0; }
+    .compare > p:first-of-type { margin-top: 0; opacity: 0.85; }
+    .file-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 12px 0 0;
+    }
+    .file-pane {
+      margin: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      min-width: 0;
+    }
+    .file-pane label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .file-pane input { max-width: 100%; }
+    .file-meta {
+      margin: 10px 0 0;
+      font-size: 0.85em;
+      opacity: 0.85;
+    }
+    .hash {
+      display: block;
+      margin-top: 6px;
+      word-break: break-all;
+    }
+    .verdict {
+      font-size: 1.15em;
+      font-weight: bold;
+      margin: 14px 0 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--panel);
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      .file-grid { grid-template-columns: 1fr; }
+    }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .pending { opacity: 0.7; font-weight: normal; }
+  </style>
+</head>
+<body>
+  <a class="home-link" href="/">← All tests</a>
+  <h1>Image IPTC metadata stripper download</h1>
+  <p>
+    <a href="https://github.com/brave/brave-browser/issues/58636">brave-browser#58636</a>
+  </p>
+
+  <div class="card">
+    <h2>How to test</h2>
+    <ol>
+      <li>
+        Switch <a href="brave://flags/#brave-strip-image-metadata-v1"><code>brave://flags/#brave-strip-image-metadata-v1</code></a>
+        to <b>Disabled</b> and relaunch browser.
+      </li>
+      <li>
+        Click on the <b>Download test file</b> button and save the file.
+      </li>
+      <li>
+        Switch the
+        <a href="brave://flags/#brave-strip-image-metadata-v1"><code>brave://flags/#brave-strip-image-metadata-v1</code></a>
+        to <b>Enabled</b> and relaunch browser.
+      </li>
+      <li>
+        Click on the <b>Download test file</b> button and save the file.
+      </li>
+      <li>
+        Upload both downloads in <b>Compare files</b> and check that the
+        hashes match.
+      </li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <p>
+      Download
+    </p>
+    <p>
+      <a class="btn" href="image-metadata-test-file" download="image-metadata-test-file">Download test file</a>
+    </p>
+  </div>
+
+  <div class="compare">
+    <h2>Compare files</h2>
+    <p>Choose the two downloads. SHA-256 is computed in this page from the file bytes.</p>
+    <div class="file-grid">
+      <div class="file-pane">
+        <label for="file-a">File A (flag disabled)</label>
+        <input id="file-a" type="file">
+        <p class="file-meta" id="meta-a">No file chosen.</p>
+      </div>
+      <div class="file-pane">
+        <label for="file-b">File B (flag enabled)</label>
+        <input id="file-b" type="file">
+        <p class="file-meta" id="meta-b">No file chosen.</p>
+      </div>
+    </div>
+    <p class="verdict pending" id="verdict">Choose both files.</p>
+  </div>
+  <script>
+    const hashes = { a: null, b: null };
+
+    function hex(buffer) {
+      return [...new Uint8Array(buffer)]
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    async function sha256(file) {
+      const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+      return hex(digest);
+    }
+
+    function renderMeta(id, file, hash) {
+      const el = document.getElementById('meta-' + id);
+      if (!file) {
+        el.textContent = 'No file chosen.';
+        return;
+      }
+      el.innerHTML =
+        escapeHtml(file.name) + ' · ' + file.size + ' bytes' +
+        '<code class="hash">' + hash + '</code>';
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function updateVerdict() {
+      const el = document.getElementById('verdict');
+      if (!hashes.a || !hashes.b) {
+        el.className = 'verdict pending';
+        el.textContent = 'Choose both files.';
+        return;
+      }
+      if (hashes.a === hashes.b) {
+        el.className = 'verdict ok';
+        el.textContent = 'Identical — SHA-256 matches.';
+      } else {
+        el.className = 'verdict bad';
+        el.textContent = 'Different — SHA-256 does not match.';
+      }
+    }
+
+    async function onFile(id, input) {
+      const file = input.files && input.files[0];
+      hashes[id] = null;
+      if (!file) {
+        renderMeta(id, null, '');
+        updateVerdict();
+        return;
+      }
+      document.getElementById('meta-' + id).textContent = 'Hashing…';
+      try {
+        const hash = await sha256(file);
+        hashes[id] = hash;
+        renderMeta(id, file, hash);
+      } catch (err) {
+        document.getElementById('meta-' + id).textContent =
+          'Could not hash this file. Open this page over https or localhost, not as a local file.';
+      }
+      updateVerdict();
+    }
+
+    document.getElementById('file-a').addEventListener('change', (e) => onFile('a', e.target));
+    document.getElementById('file-b').addEventListener('change', (e) => onFile('b', e.target));
+  </script>
+</body>
+</html>
