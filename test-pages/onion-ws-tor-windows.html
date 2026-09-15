@@ -1,15 +1,16 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ServiceWorker .onion WebSocket DNS leak outside Tor windows</title>
+  <title>ServiceWorker .onion WebSocket DNS leak outside Tor windows test</title>
   <style>
     :root {
       color-scheme: light dark;
       --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      --maxw: 800px;
+      --maxw: 760px;
       --radius: 14px;
       --accent: #0066cc;
       --line: rgba(127, 127, 127, 0.28);
@@ -20,6 +21,7 @@
       --bad: #c0392b;
       --warn: #b9770e;
     }
+
     @media (prefers-color-scheme: dark) {
       :root {
         --accent: #4ea1ff;
@@ -28,6 +30,7 @@
         --warn: #fbbf24;
       }
     }
+
     body {
       font-family: var(--font-sans);
       line-height: 1.45;
@@ -35,9 +38,25 @@
       padding: 18px;
       max-width: var(--maxw);
     }
-    h1 { font-size: 1.4em; margin: 0 0 8px; }
-    h2 { font-size: 1.15em; }
-    a { color: var(--accent); }
+
+    h1 {
+      font-size: 1.4em;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: 1.15em;
+    }
+
+    h3 {
+      font-size: 1em;
+      margin: 0 0 4px;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
     .home-link {
       display: inline-block;
       margin-bottom: 10px;
@@ -45,7 +64,11 @@
       text-decoration: none;
       opacity: 0.7;
     }
-    .home-link:hover { opacity: 1; }
+
+    .home-link:hover {
+      opacity: 1;
+    }
+
     .card {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -53,39 +76,75 @@
       margin: 14px 0;
       background: var(--panel);
     }
+
     .card.ready {
       border-color: var(--accent);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
     }
-    .card ol { margin: 0.4em 0 0 1.2em; padding: 0; }
-    .card li { margin: 0.55em 0; }
-    .muted { opacity: 0.85; }
-    .small { font-size: 0.9em; }
-    code, .mono { font-family: var(--font-mono); }
+
+    .card ol {
+      margin: 0.4em 0 0 1.2em;
+      padding: 0;
+    }
+
+    .card li {
+      margin: 0.5em 0;
+    }
+
+    .muted {
+      opacity: 0.85;
+    }
+
+    .small {
+      font-size: 0.9em;
+    }
+
+    code,
+    .mono {
+      font-family: var(--font-mono);
+    }
+
     code {
       background: var(--code-bg);
       padding: 2px 6px;
       border-radius: 4px;
       word-break: break-all;
     }
+
     pre {
       background: var(--panel-strong);
       padding: 12px;
       border-radius: 6px;
-      overflow-x: auto;
       font-size: 0.85em;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
-    pre code { background: none; padding: 0; }
-    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-    th, td {
+
+    pre code {
+      background: none;
+      padding: 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    th,
+    td {
       border: 1px solid var(--line);
       padding: 8px 12px;
       text-align: left;
       vertical-align: top;
       font-size: 0.92em;
     }
-    th { background: var(--panel-strong); }
-    #results td:last-child { font-weight: bold; }
+
+    th {
+      background: var(--panel-strong);
+    }
+
     button {
       font-size: 1em;
       padding: 9px 20px;
@@ -95,12 +154,42 @@
       background: var(--panel-strong);
       color: inherit;
     }
-    button:hover { background: var(--line); }
-    .ok, .safe { color: var(--ok); }
-    .blocked, .bad, .leak { color: var(--bad); font-weight: bold; }
-    .pending { opacity: 0.6; }
-    .warn { color: var(--warn); }
-    .verdict { font-size: 1.15em; font-weight: bold; margin: 8px 0 10px; }
+
+    button:hover:not(:disabled) {
+      background: var(--line);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .ok,
+    .safe {
+      color: var(--ok);
+    }
+
+    .blocked,
+    .bad,
+    .leak {
+      color: var(--bad);
+      font-weight: bold;
+    }
+
+    .pending {
+      opacity: 0.6;
+    }
+
+    .warn {
+      color: var(--warn);
+    }
+
+    .verdict {
+      font-size: 1.15em;
+      font-weight: bold;
+      margin: 8px 0 10px;
+    }
+
     #drop {
       border: 2px dashed var(--line);
       border-radius: 8px;
@@ -108,121 +197,100 @@
       margin: 12px 0 0;
       text-align: center;
     }
-    #drop.over { background: var(--panel-strong); border-color: var(--accent); }
+
+    #drop.over {
+      background: var(--panel-strong);
+      border-color: var(--accent);
+    }
+
     #reasoning {
       margin: 0;
       padding: 12px;
       background: var(--panel-strong);
       border-radius: 8px;
     }
-    .cmd-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
-    .cmd-row pre { flex: 1; margin: 8px 0 0; }
-    .cmd-row button { margin-top: 8px; }
-    .callout {
-      border: 1px solid var(--warn);
-      border-radius: var(--radius);
-      padding: 12px 16px;
-      margin: 14px 0;
-      background: var(--panel-strong);
-    }
-    .callout.captured { border-color: var(--ok); }
-    .callout.not-captured { border-color: var(--bad); }
   </style>
 </head>
+
 <body>
   <a class="home-link" href="/">← All tests</a>
-  <h1>ServiceWorker .onion WebSocket DNS leak outside Tor windows</h1>
-  <p id="instance-banner" class="callout not-captured"></p>
+  <h1>ServiceWorker .onion WebSocket DNS leak outside Tor windows test</h1>
 
   <div class="card">
-    <h2>What this tests</h2>
-    <p>
-      <code>kOnionOnlyInTorWindows</code> (default on) should stop
-      <code>.onion</code> WebSockets outside Tor windows, with
-      <b>no DNS</b>. A <code>ServiceWorker</code> can still open the same
-      socket and reach the network stack. JavaScript will show
-      <span class="blocked">ERROR</span> in both cases — the leak is in the
-      netlog, not the WebSocket result.
-    </p>
-    <p>Control: <code id="page-url"></code><br>
-      Vector: <code id="worker-url"></code></p>
-  </div>
-
-  <div class="card">
-    <h2>How to test</h2>
+    <h2>Test requirements</h2>
     <ol>
       <li>
-        In the captured instance, open
-        <code>brave://settings/privacy</code> and under <b>Tor windows</b>
-        enable <b>Only resolve .onion addresses in Tor windows</b>
-        (it is on by default in a clean profile).
-      </li>
-      <li>
-        From <b>this</b> page (instructions are fine in Stable), copy the
-        command and run it in Terminal. It launches a <b>second Brave</b>,
-        not a tab in the browser you are reading now, and writes
-        <code>~/Downloads/onion-ws-poc/netlog.json</code>.
-        <div class="cmd-row">
-          <pre><code id="launch-cmd"></code></pre>
-          <button type="button" id="copy-cmd">Copy</button>
-        </div>
-      </li>
-      <li>
-        Switch to <b>that new instance</b> (the banner there will say
-        captured). Click <b>Start Stage 1</b>, wait for
-        <span class="ok">Finished</span>, then <b>Stop Stage 1</b>.
-      </li>
-      <li>
-        Quit the captured Brave so <code>netlog.json</code> is flushed.
-        Reopen this page in any browser to load the file in Stage 2 —
-        Start stays off unless the URL has <code>capture=1</code>.
-      </li>
-      <li>
-        <b>Stage 2:</b> choose or drop
-        <code>Downloads/onion-ws-poc/netlog.json</code>.
-        That is when the verdict appears.
+        Ensure <b>Only resolve .onion addresses in Tor windows</b> setting is enabled in
+        <code>brave://settings/privacy</code>.
       </li>
     </ol>
   </div>
 
-  <div class="card" id="stage-sockets">
-    <h2>Stage 1 — Run the sockets</h2>
-    <p class="small muted" id="stage1-copy"></p>
+  <div class="card">
+    <h2>Test steps</h2>
+
+    <h3>Stage 1 — Record DNS entries</h3>
+    <ol>
+      <li>
+        Go to <code>brave://net-export</code>, choose <b>Include raw bytes</b> for
+        maximum information, and start a fresh logging to a new file.
+      </li>
+      <li>Click on the <b>Start</b> button below, wait for 5 seconds.</li>
+      <li>Click on the <b>Stop</b> button.</li>
+      <li>Stop the network logging in <code>brave://net-export</code>.</li>
+    </ol>
+
     <table id="results">
-      <tr><th>Initiator</th><th>Progress</th></tr>
-      <tr><td>page (main frame)</td><td id="r-page" class="pending" data-progress="idle">Not started</td></tr>
-      <tr><td>service-worker</td><td id="r-service" class="pending" data-progress="idle">Not started</td></tr>
+      <tr>
+        <th>Initiator</th>
+        <th>Progress</th>
+      </tr>
+      <tr>
+        <td>page (main frame)</td>
+        <td id="r-page" class="pending" data-progress="idle">Not started</td>
+      </tr>
+      <tr>
+        <td>service-worker</td>
+        <td id="r-service" class="pending" data-progress="idle">Not started</td>
+      </tr>
     </table>
     <p class="small" id="stage1-status">Not started.</p>
     <p>
-      <button type="button" id="start-stage1">Start Stage 1</button>
-      <button type="button" id="stop-stage1" disabled>Stop Stage 1</button>
+      <button type="button" id="start-stage1">Start</button>
+      <button type="button" id="stop-stage1" disabled>Stop</button>
     </p>
   </div>
 
   <div class="card" id="stage-netlog">
-    <h2>Stage 2 — Load netlog (verdict)</h2>
-    <p id="netlog-hint" class="muted">
-      After Stage 1 is finished and stopped, quit the captured Brave, reopen
-      this page without clicking Start, then pick the file.
+    <h2>Verification</h2>
+
+    <h3>Stage 2 — Drop the net log file</h3>
+    <p class="muted" id="netlog-hint">
+      Choose or drop the net log file you saved in <code>brave://net-export</code>. The verdict appears once it loads.
     </p>
     <p>
       <label>Net-export JSON
         <input id="netlog" type="file" accept=".json,application/json">
       </label>
     </p>
-    <div id="drop">Drop <code>netlog.json</code> here</div>
-  </div>
+    <div id="drop">Drop the net log <code>.json</code> file here</div>
 
-  <div class="card" id="stage-verdict">
-    <h2>Verdict</h2>
     <table>
-      <tr><th>Initiator</th><th>Netlog</th></tr>
-      <tr><td>Main frame</td><td id="v-page" class="pending">—</td></tr>
-      <tr><td>Service worker</td><td id="v-sw" class="pending">—</td></tr>
+      <tr>
+        <th>Initiator</th>
+        <th>Netlog</th>
+      </tr>
+      <tr>
+        <td>Main frame</td>
+        <td id="v-page" class="pending">—</td>
+      </tr>
+      <tr>
+        <td>Service worker</td>
+        <td id="v-sw" class="pending">—</td>
+      </tr>
     </table>
     <p class="verdict pending" id="verdict">Waiting for netlog</p>
-    <p id="reasoning" class="muted">Load the captured netlog in Stage 2 to see why.</p>
+    <p id="reasoning" class="muted">Load the captured netlog to see the result.</p>
     <details>
       <summary>Netlog event details</summary>
       <pre id="netlog-out">(no log loaded)</pre>
@@ -242,62 +310,8 @@
       tag = String(Date.now());
       pageUrl = 'wss://frame-probe-' + tag + '.onion/';
       workerUrl = 'wss://worker-probe-' + tag + '.onion/';
-      document.getElementById('page-url').textContent = pageUrl;
-      document.getElementById('worker-url').textContent = workerUrl;
     }
     newProbeUrls();
-
-    const hostedTestPage = 'https://r0hit0303.github.io/test-pages/onion-ws-tor-windows.html';
-    const capturePage = new URL(hostedTestPage);
-    capturePage.searchParams.set('capture', '1');
-    const isCapturedInstance = new URLSearchParams(location.search).get('capture') === '1';
-
-    const banner = document.getElementById('instance-banner');
-    const stage1Copy = document.getElementById('stage1-copy');
-    const startBtn = document.getElementById('start-stage1');
-    if (isCapturedInstance) {
-      banner.className = 'callout captured';
-      banner.innerHTML =
-        '<b>Captured Brave instance.</b> This window should be the one launched by the command ' +
-        '(separate <code>--user-data-dir</code> and netlog). Run Stage 1 <b>here</b>, not in Brave Stable.';
-      stage1Copy.textContent =
-        'Start Stage 1 only in this captured window. After you quit it and reopen the page to read the netlog, Start is disabled unless capture=1 is in the URL.';
-    } else {
-      banner.className = 'callout not-captured';
-      banner.innerHTML =
-        '<b>This is not the test instance.</b> Do not click Start Stage 1 in Brave Stable or your normal profile. ' +
-        'Copy the command in How to test — it opens a <b>separate</b> Brave with a throwaway profile and netlog. ' +
-        'You can still load a netlog here in Stage 2.';
-      stage1Copy.textContent =
-        'Start is disabled in this window. Run the launch command, then use Start in that other Brave.';
-      startBtn.disabled = true;
-    }
-
-    document.getElementById('launch-cmd').textContent =
-      'BRAVE="/Applications/Brave Browser Nightly.app"\n' +
-      'WORK="$HOME/Downloads/onion-ws-poc"\n' +
-      'URL=' + JSON.stringify(capturePage.href) + '\n' +
-      '\n' +
-      'mkdir -p "$WORK"\n' +
-      'rm -rf "$WORK/profile" "$WORK/netlog.json"\n' +
-      '\n' +
-      'open -na "$BRAVE" --args \\\n' +
-      '  --user-data-dir="$WORK/profile" \\\n' +
-      '  --no-first-run \\\n' +
-      '  --no-default-browser-check \\\n' +
-      '  --log-net-log="$WORK/netlog.json" \\\n' +
-      '  --net-log-capture-mode=Everything \\\n' +
-      '  "$URL"\n';
-
-    document.getElementById('copy-cmd').addEventListener('click', async () => {
-      const text = document.getElementById('launch-cmd').textContent;
-      try {
-        await navigator.clipboard.writeText(text);
-        document.getElementById('copy-cmd').textContent = 'Copied';
-      } catch (e) {
-        document.getElementById('copy-cmd').textContent = 'Copy failed';
-      }
-    });
 
     function setCell(id, status, extra) {
       const cell = document.getElementById(id);
@@ -338,18 +352,13 @@
 
     function markNetlogStage() {
       const card = document.getElementById('stage-netlog');
-      const hint = document.getElementById('netlog-hint');
       const status = document.getElementById('stage1-status');
       if (!socketsSettled()) return;
       stage1Done = true;
       card.classList.add('ready');
       status.className = 'small ok';
-      status.textContent =
-        'Stage 1 finished. Click Stop Stage 1, then you can load the netlog in this window or after reopening — do not click Start again.';
-      hint.innerHTML =
-        '<b>Stage 1 is finished.</b> Click Stop if it is still enabled, then choose or drop ' +
-        '<code>Downloads/onion-ws-poc/netlog.json</code>. If you quit the captured Brave to flush the file, reopen this page and skip Start.';
-      document.getElementById('start-stage1').disabled = !isCapturedInstance;
+      status.textContent = 'Stage 1 finished. Click Stop, then stop the logging in brave://net-export and drop the file below.';
+      document.getElementById('start-stage1').disabled = false;
       document.getElementById('stop-stage1').disabled = false;
     }
 
@@ -361,7 +370,7 @@
           if (settled) return;
           settled = true;
           clearTimeout(timer);
-          try { ws && ws.close(1000); } catch (e) {}
+          try { ws && ws.close(1000); } catch (e) { }
           resolve({ status: status, extra: extra || '' });
         };
         const timer = setTimeout(() => done('TIMEOUT'), 8000);
@@ -408,15 +417,12 @@
     }
 
     async function runSockets() {
-      if (!isCapturedInstance) return;
       const id = ++runId;
       stage1Done = false;
       newProbeUrls();
       setCell('r-page', 'testing…');
       setCell('r-service', 'testing…');
       document.getElementById('stage-netlog').classList.remove('ready');
-      document.getElementById('netlog-hint').textContent =
-        'After Stage 1 is finished and stopped, you can load the netlog here.';
       const stage1 = document.getElementById('stage1-status');
       stage1.className = 'small';
       stage1.textContent = 'Stage 1 running…';
@@ -434,25 +440,24 @@
 
     async function stopStage1() {
       runId++;
-      try { pageWs && pageWs.close(1000); } catch (e) {}
+      try { pageWs && pageWs.close(1000); } catch (e) { }
       pageWs = null;
       if (swReg) {
-        try { await swReg.unregister(); } catch (e) {}
+        try { await swReg.unregister(); } catch (e) { }`
         swReg = null;
       }
-      document.getElementById('start-stage1').disabled = !isCapturedInstance;
+      document.getElementById('start-stage1').disabled = false;
       document.getElementById('stop-stage1').disabled = true;
       const status = document.getElementById('stage1-status');
       if (stage1Done) {
         status.className = 'small ok';
-        status.textContent =
-          'Stage 1 stopped. Load the netlog in Stage 2. If you reopen this page, do not click Start.';
+        status.textContent = 'Stage 1 stopped. Stop the logging in brave://net-export, then drop the file below.';
       } else {
         setCell('r-page', 'idle');
         setCell('r-service', 'idle');
         document.getElementById('stage-netlog').classList.remove('ready');
         status.className = 'small';
-        status.textContent = 'Stopped. No sockets will run until you click Start Stage 1.';
+        status.textContent = 'Stopped. No sockets will run until you click Start.';
       }
     }
 
@@ -473,7 +478,7 @@
           typeNames: invertMap(data.constants && data.constants.logEventTypes),
           events: data.events || []
         };
-      } catch (e) {}
+      } catch (e) { }
       const he = raw.indexOf('"events"');
       if (he < 0) throw new Error('no events array');
       const head = raw.slice(0, he).replace(/,\s*$/, '') + '}';
@@ -493,7 +498,7 @@
             try {
               const o = JSON.parse(body.slice(start, i + 1));
               if (o && o.source && o.type !== undefined) events.push(o);
-            } catch (err) {}
+            } catch (err) { }
             start = -1;
           }
         }
@@ -592,7 +597,7 @@
           'The page socket never reached the network stack. The service worker did (URL_REQUEST / HOST_RESOLVER). ' +
           (worker.q
             ? 'DNS_TRANSACTION_QUERY means a stub/DoH query left the machine.'
-            : 'No DNS_TRANSACTION_QUERY — macOS may have used getaddrinfo, which can fail locally without sending a packet.');
+            : 'No DNS_TRANSACTION_QUERY — the OS may have used getaddrinfo, which can fail locally without sending a packet.');
       } else if (pageBlocked && !workerNetwork) {
         setRow(vPage, 'Blocked', 'ok');
         setRow(vSw, 'Blocked', 'ok');
@@ -612,7 +617,7 @@
         label = 'Inconclusive';
         klass = 'verdict warn';
         reason =
-          'No matching frame-probe / worker-probe events. Capture may have ended too early, used another run, or was not Everything mode.';
+          'No matching frame-probe / worker-probe events. Capture may have ended too early, used another run, or was not raw-bytes mode.';
       }
 
       verdictEl.textContent = label;
@@ -622,9 +627,9 @@
       document.getElementById('netlog-out').textContent = [
         'file: ' + file.name + ' (' + eventCount + ' events)',
         'page: URL_REQUEST=' + page.url + ' HOST_RESOLVER=' + page.r +
-          ' SYSTEM=' + page.sys + ' DNS_TRANSACTION_QUERY=' + page.q,
+        ' SYSTEM=' + page.sys + ' DNS_TRANSACTION_QUERY=' + page.q,
         'service-worker: URL_REQUEST=' + worker.url + ' HOST_RESOLVER=' + worker.r +
-          ' SYSTEM=' + worker.sys + ' DNS_TRANSACTION_QUERY=' + worker.q,
+        ' SYSTEM=' + worker.sys + ' DNS_TRANSACTION_QUERY=' + worker.q,
         '',
         '--- page ---',
         dumpRole(page, typeNames),
@@ -668,4 +673,5 @@
     });
   </script>
 </body>
+
 </html>
