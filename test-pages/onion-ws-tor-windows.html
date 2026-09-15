@@ -443,7 +443,7 @@
       try { pageWs && pageWs.close(1000); } catch (e) { }
       pageWs = null;
       if (swReg) {
-        try { await swReg.unregister(); } catch (e) { }`
+        try { await swReg.unregister(); } catch (e) { }
         swReg = null;
       }
       document.getElementById('start-stage1').disabled = false;
