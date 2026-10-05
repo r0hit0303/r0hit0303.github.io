@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Brave farbling: getImageData vs VideoFrame.copyTo</title>
+    <style>
+        body {
+            font: 14px/1.5 system-ui, sans-serif;
+            margin: 24px;
+            max-width: 820px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            image-rendering: pixelated;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        td,
+        th {
+            border: 1px solid #ddd;
+            padding: 6px 10px;
+            text-align: left;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
+        .ok {
+            color: #0a0;
+            font-weight: 600;
+        }
+
+        .leak {
+            color: #c00;
+            font-weight: 600;
+        }
+
+        #log {
+            white-space: pre-wrap;
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Canvas farbling vs <code>VideoFrame</code></h1>
+    <p>Draws one scene, then reads the <b>same canvas</b> back two ways and compares.</p>
+    <canvas id="c" width="320" height="200"></canvas>
+    <div id="out"></div>
+    <h3>Log</h3>
+    <div id="log"></div>
+
+    <script>
+        const logEl = document.getElementById('log');
+        const log = (...a) => { logEl.textContent += a.join(' ') + '\n'; };
+
+        // --- 1. Draw a fingerprinting-style scene -------------------------------
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d', { willReadFrequently: false });
+
+        const g = ctx.createLinearGradient(0, 0, 320, 200);
+        g.addColorStop(0, '#f00'); g.addColorStop(0.5, '#0f0'); g.addColorStop(1, '#00f');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 320, 200);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.font = '28px serif';
+        ctx.fillText('Brave fingerprint \u{1F512} 123', 10, 60);
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.beginPath();
+        for (let i = 0; i < 20; i++) ctx.arc(60 + i * 12, 140, 30, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // --- helpers ------------------------------------------------------------
+        async function sha256Hex(bytes) {
+            const h = await crypto.subtle.digest('SHA-256', bytes);
+            return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Read via getImageData() -> Brave perturbs this buffer.
+        function readViaGetImageData() {
+            const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data; // RGBA
+            return new Uint8Array(d.buffer.slice(0)); // detach a copy
+        }
+
+        // Read via VideoFrame(canvas).copyTo() -> the path under investigation.
+        async function readViaVideoFrame() {
+            const vf = new VideoFrame(canvas, { timestamp: 0 });
+            log('VideoFrame.format =', vf.format,
+                '| codedWidth =', vf.codedWidth, '| codedHeight =', vf.codedHeight);
+
+            const W = canvas.width, H = canvas.height;
+            let opts = { format: 'RGBA', rect: { x: 0, y: 0, width: W, height: H } };
+            let layout;
+            try {
+                const size = vf.allocationSize(opts);
+                var buf = new Uint8Array(size);
+                layout = await vf.copyTo(buf, opts);     // request RGBA explicitly
+            } catch (e) {
+                // Fallback: some builds reject format conversion in copyTo.
+                log('copyTo({format:"RGBA"}) failed (', e.name, '); retrying native format');
+                opts = { rect: { x: 0, y: 0, width: W, height: H } };
+                const size = vf.allocationSize(opts);
+                var buf = new Uint8Array(size);
+                layout = await vf.copyTo(buf, opts);
+            }
+            const nativeFmt = (opts.format) || vf.format;
+            vf.close();
+
+            // Repack using plane layout (handle row stride padding) into tight RGBA.
+            const { offset, stride } = layout[0];
+            const out = new Uint8Array(W * H * 4);
+            for (let y = 0; y < H; y++) {
+                const row = buf.subarray(offset + y * stride, offset + y * stride + W * 4);
+                out.set(row, y * W * 4);
+            }
+            // Normalize BGRA -> RGBA if we fell back to a native BGRA layout.
+            if (/^BGR/.test(nativeFmt)) {
+                for (let i = 0; i < out.length; i += 4) {
+                    const b = out[i]; out[i] = out[i + 2]; out[i + 2] = b;
+                }
+            }
+            return out;
+        }
+
+        function diffStats(a, b) {
+            const n = Math.min(a.length, b.length);
+            let diffBytes = 0, diffPixels = 0;
+            for (let i = 0; i < n; i += 4) {
+                let px = 0;
+                for (let k = 0; k < 4; k++) if (a[i + k] !== b[i + k]) { diffBytes++; px = 1; }
+                diffPixels += px;
+            }
+            return { diffBytes, diffPixels, total: n / 4 };
+        }
+
+        // --- run ----------------------------------------------------------------
+        (async () => {
+            try {
+                if (!('VideoFrame' in window)) { log('WebCodecs VideoFrame not available.'); return; }
+
+                const gid1 = readViaGetImageData();
+                const gid2 = readViaGetImageData();      // second read, same session
+                const vfPixels = await readViaVideoFrame();
+
+                const [hGid1, hGid2, hVf] = await Promise.all([
+                    sha256Hex(gid1), sha256Hex(gid2), sha256Hex(vfPixels)
+                ]);
+
+                const gidVsGid = diffStats(gid1, gid2);
+                const gidVsVf = diffStats(gid1, vfPixels);
+
+                log('getImageData length =', gid1.length, '| VideoFrame RGBA length =', vfPixels.length);
+
+                const bypass = gidVsVf.diffPixels > 0;
+                document.getElementById('out').innerHTML = `
+      <table>
+        <tr><th>Read method</th><th>SHA-256 of RGBA bytes</th></tr>
+        <tr><td><code>getImageData()</code> #1 (farbled)</td><td><code>${hGid1}</code></td></tr>
+        <tr><td><code>getImageData()</code> #2 (farbled)</td><td><code>${hGid2}</code></td></tr>
+        <tr><td><code>VideoFrame.copyTo()</code></td><td><code>${hVf}</code></td></tr>
+      </table>
+      <p>getImageData #1 vs #2 differ in <b>${gidVsGid.diffPixels}</b> / ${gidVsGid.total} pixels
+         (should be 0 — farbling is deterministic per session+domain).</p>
+      <p>getImageData vs VideoFrame differ in <b>${gidVsVf.diffPixels}</b> / ${gidVsVf.total} pixels
+         (${gidVsVf.diffBytes} bytes).</p>
+      <p class="${bypass ? 'leak' : 'ok'}">
+        ${bypass
+                        ? 'DIFFERENT \u2192 VideoFrame.copyTo() is NOT farbled; it exposes the raw canvas (farbling bypass).'
+                        : 'IDENTICAL \u2192 either shields/farbling is off, or VideoFrame is also farbled.'}
+      </p>`;
+            } catch (e) {
+                log('Error:', e && e.stack || e);
+            }
+        })();
+    </script>
+</body>
+
+</html>
