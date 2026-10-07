@@ -1,1 +1,1 @@
-This repo is used to serve contents for r0hit0303.github.io.
+This repo is used to serve contents for r0hit0303.github.io. The site primarily serves test pages to run in browser.
