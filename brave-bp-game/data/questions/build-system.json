@@ -1,0 +1,614 @@
+[
+  {
+    "rule": "BS-001",
+    "prompt": "A PR updates a dependency in `DEPS`:\n\n```python\n'src/brave/vendor/foo': 'https://github.com/brave/foo.git@v1.2.0',\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Looks good — release tags are stable markers",
+      "Use the `main` branch so fixes are picked up automatically",
+      "Pin it to a commit hash instead of a tag",
+      "Use a version range so patch releases are allowed"
+    ],
+    "answer": 2,
+    "explain": "DEPS entries must always use commit hashes, never branch names or tags. Hashes are immutable, so builds are reproducible."
+  },
+  {
+    "rule": "BS-003",
+    "prompt": "A teammate adds a new GN arg `brave_android_keystore_path` for signing Android builds. Chromium already defines `android_keystore_path`. Best response?",
+    "choices": [
+      "Reuse the existing `android_keystore_path` arg rather than duplicating it",
+      "Fine — the `brave_` prefix keeps it from clashing with upstream if Chromium changes theirs",
+      "Rename it `enable_brave_android_keystore_path` to follow the buildflag naming convention",
+      "Keep both, defaulting the new one to upstream's value"
+    ],
+    "answer": 0,
+    "explain": "Check for existing GN args before creating new ones. Duplicated config args confuse people and add maintenance burden."
+  },
+  {
+    "rule": "BS-004",
+    "prompt": "You're reviewing a new build script:\n\n```python\nimport sys\n\ndef main():\n    out = sys.argv[1]\n    generate(out)\n\nmain()\n```\n\nWhich change brings it in line with the conventions?",
+    "choices": [
+      "Rewrite it in Node.js so it matches the frontend tooling and shares its npm deps",
+      "Keep `sys.argv`, but add a length check and print usage before indexing",
+      "Wrap `main()` in try/except and always exit 0 so a flaky step never breaks the build",
+      "Use `argparse` and end with `if __name__ == '__main__': sys.exit(main())`"
+    ],
+    "answer": 3,
+    "explain": "Python build scripts should use `argparse` rather than raw `sys.argv`, and the standard `sys.exit(main())` entry point so they can return explicit exit codes."
+  },
+  {
+    "rule": "BS-005",
+    "prompt": "The root `source_set(\"browser\")` already has ~200 sources and ~100 deps. A PR adds 4 new branded-wallpaper files to its `sources` and 2 deps to its `deps`. What should the reviewer ask for?",
+    "choices": [
+      "Just keep the new sources in order and the deps sorted alphabetically within the lists",
+      "Move the feature into its own target with grouped `sources` and `deps`",
+      "Move all of the target's deps into a separate `deps.gni` file to shrink `BUILD.gn`",
+      "Nothing — it's fine as long as `gn check` passes"
+    ],
+    "answer": 1,
+    "explain": "Always group `sources` and `deps` in the same block. Split files into feature-specific targets/BUILD.gn files so it's clear which deps belong to which sources."
+  },
+  {
+    "rule": "BS-006",
+    "prompt": "A single GN target contains three separate `if (enable_brave_vpn) { ... }` blocks, scattered between other sources and deps. What's the right feedback?",
+    "choices": [
+      "Fine — each block keeps its sources close to their related deps",
+      "Replace them with `if (is_win || is_mac)` blocks",
+      "Move the VPN-only sources into a `sources.gni` file",
+      "Consolidate them into a single `if (enable_brave_vpn)` block"
+    ],
+    "answer": 3,
+    "explain": "A BUILD.gn target should almost never contain more than one of the same guard. If you're repeating the same `if (enable_foo)` block, consolidate."
+  },
+  {
+    "rule": "BS-007",
+    "prompt": "Which GN snippet follows the standard for adding Tor launcher sources?",
+    "choices": [
+      "`if (is_linux) { sources += [ \"tor_launcher_linux.cc\" ] }`",
+      "`if (enable_tor) { sources += [ \"tor_launcher.cc\" ] }`",
+      "`if (is_linux || is_win) { sources += [ \"tor_launcher.cc\" ] }`",
+      "`if (!is_android && !is_ios) { sources += [ \"tor_launcher.cc\" ] }`"
+    ],
+    "answer": 1,
+    "explain": "Feature-specific code is guarded by buildflags like `enable_tor`, not OS platform guards. OS guards without buildflags are deprecated."
+  },
+  {
+    "rule": "BS-008",
+    "prompt": "You're adding a compile-time flag for a top-level Brave feature, the perf predictor. It needs to be distinguishable from Chromium flags. Which name follows the convention?",
+    "choices": [
+      "`brave_perf_predictor_enabled`",
+      "`use_perf_predictor`",
+      "`enable_brave_perf_predictor`",
+      "`perf_predictor_brave`"
+    ],
+    "answer": 2,
+    "explain": "Buildflags that need to be distinguished from Chromium flags, or that are top-level Brave features, are named `enable_brave_<feature>`."
+  },
+  {
+    "rule": "BS-008",
+    "prompt": "In `components/ai_chat/core/common/buildflags/buildflags.gni`, a PR adds `enable_tab_management_tool = !is_android`. A reviewer insists it must be renamed `enable_brave_tab_management_tool`. Best response?",
+    "choices": [
+      "The prefix isn't needed: it's scoped to a Brave component's own buildflags file",
+      "Agree — every Brave buildflag must start with `enable_brave_` to avoid upstream clashes",
+      "Rename it `brave_tab_management_tool_enabled`, since suffix naming is the GN convention",
+      "Move the flag into Chromium's buildflags via a patch so no prefix is needed"
+    ],
+    "answer": 0,
+    "explain": "The `enable_brave_` prefix is only needed to avoid ambiguity with Chromium. Flags that are clearly Brave-specific by context, such as one in a Brave component's own buildflags file, don't need it."
+  },
+  {
+    "rule": "BS-010",
+    "prompt": "A PR vendors a small third-party library and copies Chromium's `LICENSE` file into the new directory, because the library uses the same license. What should the reviewer say?",
+    "choices": [
+      "Good practice — each vendored directory should carry its own license copy for audits",
+      "Don't duplicate the license file; use a special case or a reference",
+      "Rename it to `LICENSE.brave` so license tooling doesn't confuse it with upstream's",
+      "Also copy it into `brave/LICENSES/` for completeness"
+    ],
+    "answer": 1,
+    "explain": "Never duplicate Chromium's (or other projects') license files. Use special cases or references instead."
+  },
+  {
+    "rule": "BS-011",
+    "prompt": "A feature ships a `static_data.json` that is needed by both C++ and the WebUI. The PR reads it at runtime with `base::ReadFileToString()` from a path next to the binary. Better approach?",
+    "choices": [
+      "Embed the JSON as a C++ raw string literal in a header",
+      "Fetch it from a Brave server at startup instead",
+      "Keep reading from disk, but cache the file contents in memory",
+      "Package it as a resource in a `.grd` file"
+    ],
+    "answer": 3,
+    "explain": "JSON data files should be packaged as `.grd` resources rather than loaded from disk. That way the same data can be used from both C++ and JS."
+  },
+  {
+    "rule": "BS-013",
+    "prompt": "A Chromium target needs to pull in Brave code. A patch adds this to an upstream target:\n\n```gn\nvisibility += [ \"//brave/components/brave_rewards/browser\" ]\n```\n\nWhat should be done instead?",
+    "choices": [
+      "Depend on an existing high-level target with visibility, e.g. `//brave/utility`",
+      "Fine — patching the `visibility` list is the minimal, most targeted change possible",
+      "Remove the `visibility` list from the upstream target entirely via the patch",
+      "Add `nogncheck` to the include so the visibility restriction isn't enforced"
+    ],
+    "answer": 0,
+    "explain": "Use high-level `//brave/` targets (like `//brave/utility`) instead of modifying Chromium visibility lists. Those lists exist precisely to prevent this kind of cross-boundary dependency."
+  },
+  {
+    "rule": "BS-015",
+    "prompt": "You're writing a new Python script that is only invoked by a GN `action()` in `components/foo/resources/BUILD.gn`. Where should the script live?",
+    "choices": [
+      "In `brave/script/`, alongside the other build scripts, so they're easy to find",
+      "In a new top-level `brave/tools/` directory",
+      "In `components/foo/resources/`, next to the action that uses it",
+      "In a separate scripts repo pulled in via DEPS, so other projects can reuse it"
+    ],
+    "answer": 2,
+    "explain": "Build and utility scripts should live near the target or config that uses them. Avoid adding new scripts to `brave/script`."
+  },
+  {
+    "rule": "BS-016",
+    "prompt": "A team proposes creating a new standalone GitHub repository for a feature's core logic, then pulling it into the build through DEPS. Best response?",
+    "choices": [
+      "Good idea — a separate repo gives smaller, faster code reviews and its own independent CI",
+      "Fine, as long as DEPS pins it to an exact commit hash rather than a branch",
+      "Only if the repo is also mirrored to Chromium's infrastructure for the bots",
+      "Keep it in brave-core; separate repos are harder to manage, review, and maintain"
+    ],
+    "answer": 3,
+    "explain": "Avoid creating separate repositories for Brave features. Prefer keeping the code within brave-core."
+  },
+  {
+    "rule": "BS-017",
+    "prompt": "A PR adds a background request at startup to a new endpoint `https://foo.brave.com/config`. There is no user opt-in. What else does the PR need?",
+    "choices": [
+      "Nothing — the network audit only checks third-party domains, not `*.brave.com`",
+      "Add the URL to the network audit allowlist in `brave_network_audit_allowed_lists.h`",
+      "Gate the request behind a disabled-by-default `base::Feature` so the network audit skips it",
+      "Only an allowlist entry if the endpoint isn't HTTPS; `https://` URLs pass the audit"
+    ],
+    "answer": 1,
+    "explain": "New endpoints that don't require user opt-in must be added to the network audit allowed list. Otherwise the network audit check fails."
+  },
+  {
+    "rule": "BS-017",
+    "prompt": "A new endpoint is hit only when the user explicitly clicks a \"Check for updates\" button. A reviewer asks for it to be added to the network audit allowed list. Best response?",
+    "choices": [
+      "None needed: the request only happens on explicit user action",
+      "Agree — every new URL must be added to the allowlist, regardless of how it's triggered",
+      "Add it, and also disable the network audit for that test to avoid false positives",
+      "Move the request to startup so the audit can catch it"
+    ],
+    "answer": 0,
+    "explain": "The network audit allowlist is for endpoints contacted without user opt-in. Never require an entry for requests made only on explicit user action, such as a button click."
+  },
+  {
+    "rule": "BS-018",
+    "prompt": "Reviewing this GN change for Brave Wallet:\n\n```gn\nif (!is_android && !is_ios) {\n  sources += [ \"brave_wallet_utils.cc\" ]\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — Wallet is desktop-only today, so the guard is equivalent",
+      "Use `if (is_win || is_mac || is_linux)` to be explicit",
+      "Guard it with the actual feature flag, `brave_wallet_enabled`",
+      "Remove the guard and use a runtime feature check instead"
+    ],
+    "answer": 2,
+    "explain": "Don't use OS guards as a proxy for a feature guard. Use the real feature flag (`brave_wallet_enabled`), because OS guards can drift out of sync with the feature logic."
+  },
+  {
+    "rule": "BS-019",
+    "prompt": "A target adds `content_helper.cc`, which depends on `//content/public/browser`. Which guard is correct?",
+    "choices": [
+      "`if (use_blink) { ... }` in GN and `#if BUILDFLAG(USE_BLINK)` in C++",
+      "`if (!is_ios) { ... }` in GN and `#if !BUILDFLAG(IS_IOS)` in C++",
+      "`if (!is_android && !is_ios) { ... }` in GN and the matching `#if` in C++",
+      "No guard — `//content` is built on every platform, including iOS and Android"
+    ],
+    "answer": 0,
+    "explain": "Content-layer dependencies are guarded with `use_blink`, the flag that actually controls whether the content layer is built. `!is_ios` is only a proxy and may not always be equivalent."
+  },
+  {
+    "rule": "BS-020",
+    "prompt": "A directory already has a `BUILD.gn`. A PR adds a `sources.gni` alongside it to list a few extra files. What's the feedback?",
+    "choices": [
+      "Fine — `sources.gni` exists precisely for listing extra files beside a `BUILD.gn`",
+      "Have either a `BUILD.gn` (preferred) or a `sources.gni`, not both",
+      "Rename it `extra_sources.gni` to make its purpose clear",
+      "Delete the `BUILD.gn` and move everything into `sources.gni` for consistency"
+    ],
+    "answer": 1,
+    "explain": "Never have both `BUILD.gn` and `sources.gni` in the same directory: it's unclear which is authoritative. Prefer `BUILD.gn`."
+  },
+  {
+    "rule": "BS-053",
+    "prompt": "A teammate puts a new feature's sources in a `sources.gni` that is inserted into an upstream Chromium target \"because it's easier\". There's no circular dependency involved. Best response?",
+    "choices": [
+      "Fine — `sources.gni` is the standard way to add Brave code to upstream targets",
+      "Fine, as long as the `sources.gni` contents are guarded by the feature's buildflag",
+      "Move it to a `chromium_src` override of the upstream target instead",
+      "Use a normal `BUILD.gn` target; `sources.gni` is only for circular deps"
+    ],
+    "answer": 3,
+    "explain": "Only use `sources.gni` to insert files into upstream targets that have circular deps. Otherwise it hurts incremental builds, because changes rebuild large upstream targets."
+  },
+  {
+    "rule": "BS-021",
+    "prompt": "You've written unit tests for `//brave/components/brave_vpn/browser/v2`. They don't need any `//chrome` or profile scaffolding. How should they be wired in?",
+    "choices": [
+      "Add the `_unittest.cc` file directly to the `brave_unit_tests` sources in `test/BUILD.gn`",
+      "Give it a `:unit_tests` target and add that to `brave_unit_tests` in `test/BUILD.gn`",
+      "Add a `:unit_tests` target to `brave_components_unittests` in `components/BUILD.gn`",
+      "Create a new `test()` executable just for this component's unit tests"
+    ],
+    "answer": 2,
+    "explain": "Tests live in a `unit_tests` target in the component's own BUILD.gn. Component tests are aggregated into `brave_components_unittests`; use `brave_unit_tests` only if they truly need chrome/browser-layer support."
+  },
+  {
+    "rule": "BS-021",
+    "prompt": "While reviewing an unrelated PR, you notice an existing dependency on `//brave/components/foo:unit_tests` inside `brave_unit_tests`. What should you do?",
+    "choices": [
+      "Block the PR until it's moved to `brave_components_unittests`",
+      "Don't flag it as a violation; many are there for historical reasons",
+      "Ask the author to move the test files into `//brave/browser` alongside the dep",
+      "Request that the dep be wrapped in `nogncheck` to silence the layering check"
+    ],
+    "answer": 1,
+    "explain": "Many component `:unit_tests` targets live in `brave_unit_tests` for historical reasons. The rule describes the target state for new code; never flag an existing dependency solely for its location."
+  },
+  {
+    "rule": "BS-022",
+    "prompt": "A `unit_tests` target lists `test/fake_dependency_service.{h,cc}` in its `sources`. Another team now wants to use the same fake in their tests. What's the right GN structure?",
+    "choices": [
+      "Move them into a `testonly` `test_support` target that `unit_tests` depends on",
+      "Have the other team depend directly on this `:unit_tests` target to reuse the fakes",
+      "Copy the fake files into the other team's `unit_tests` target so each can evolve freely",
+      "Move the fakes into the production `source_set` so anyone can use them"
+    ],
+    "answer": 0,
+    "explain": "Reusable fakes and mocks go in a separate `test_support` target rather than being embedded in `unit_tests`, so test targets across the codebase can share them."
+  },
+  {
+    "rule": "BS-023",
+    "prompt": "A new browser test should run on both desktop and Android:\n\n```cpp\nclass MyBrowserTest : public InProcessBrowserTest {};\n```\n\nWhat should change?",
+    "choices": [
+      "Nothing — `InProcessBrowserTest` already runs on Android",
+      "Duplicate the test into an Android-only fixture",
+      "Use `content::RenderViewHostTestHarness` instead",
+      "Derive from `PlatformBrowserTest` instead"
+    ],
+    "answer": 3,
+    "explain": "Cross-platform browser tests (desktop + Android) use `PlatformBrowserTest` as the base class, not `InProcessBrowserTest`."
+  },
+  {
+    "rule": "BS-024",
+    "prompt": "```gn\nsource_set(\"my_service\") {\n  sources = [ \"my_service.h\", \"my_service.cc\" ]\n  deps = [ \"//base\", \"//components/prefs\" ]\n}\n```\n\n`my_service.h` includes a prefs header; `//base` is only used in the `.cc`. What's the fix?",
+    "choices": [
+      "Move both deps to `public_deps`, since consumers will need both transitively",
+      "Move `//components/prefs` to `public_deps`; keep `//base` in `deps`",
+      "Keep both in `deps` and forward-declare the prefs types in the header",
+      "Add `//components/prefs` to every consumer's `deps`"
+    ],
+    "answer": 1,
+    "explain": "A dependency whose headers are included from your header files goes in `public_deps`, so consumers get the include paths too. Deps used only in `.cc` files stay in `deps`."
+  },
+  {
+    "rule": "BS-026",
+    "prompt": "A teammate wants to add a small helper script to brave-core that post-processes generated files. They have drafts in Bash and Node.js. Which do you recommend?",
+    "choices": [
+      "Bash — it has the fewest dependencies",
+      "Node.js — the repo already uses npm",
+      "Python, run with `vpython` from depot_tools",
+      "Either is fine as long as it's referenced from DEPS"
+    ],
+    "answer": 2,
+    "explain": "Build and utility scripts are written in Python (`vpython`), not Node.js or shell. That follows Chromium convention, avoids extra runtime deps, and works on Windows."
+  },
+  {
+    "rule": "BS-027",
+    "prompt": "```gn\nif (enable_brave_rewards) {\n  deps += [\n    \"//brave/components/brave_rewards/common/buildflags\",\n    \"//brave/components/brave_rewards/browser\",\n  ]\n}\n```\n\nThe `.cc` uses `#if BUILDFLAG(ENABLE_BRAVE_REWARDS)`. What's wrong?",
+    "choices": [
+      "Nothing — the buildflag header is only needed when Rewards is enabled at build time",
+      "The `browser` dep should be listed before `buildflags` to keep deps sorted",
+      "Both deps should move to `public_deps`, since the `.cc`'s header exposes them",
+      "The `buildflags` dep must be unconditional, since the `#if` needs it even when off"
+    ],
+    "answer": 3,
+    "explain": "When `deps +=` sits inside an `if (enable_feature)` block, add the `buildflags` dep unconditionally outside it. The `#if BUILDFLAG()` check needs that header in both states. Verify with `gn check` with the flag disabled."
+  },
+  {
+    "rule": "BS-028",
+    "prompt": "A component exposes its public API as `source_set(\"browser\")` and has a helper `source_set(\"internal_network\")` with no `visibility` set. What's the right setup?",
+    "choices": [
+      "Make the public one a `static_library`/`component`; give the internal one `visibility = [ \":*\" ]`",
+      "Keep both as `source_set`, the default for components, and document which one is internal",
+      "Turn both into `component()` targets with default public visibility so either can be linked",
+      "Keep both, but move `internal_network` into a `sources.gni` included by `browser`"
+    ],
+    "answer": 0,
+    "explain": "Public component targets use `static_library` or `component`. `source_set` is only for internal deps, and those must have restricted visibility."
+  },
+  {
+    "rule": "BS-029",
+    "prompt": "A Python build script writes a generated file:\n\n```python\nwith open(output_path, 'w') as f:\n    f.write(content)\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Open it with `'wb'` and encode the content manually",
+      "Add `newline='\\n'` to `open()` for consistent LF endings",
+      "Call `content.replace('\\r\\n', '\\n')` before writing",
+      "Nothing — Python normalizes line endings automatically"
+    ],
+    "answer": 1,
+    "explain": "Always pass `newline='\\n'` when writing files from Python, so line endings are LF on every platform, especially Windows."
+  },
+  {
+    "rule": "BS-030",
+    "prompt": "In a DEPS file, a directory allows the same content_settings includes for every `.cc` file:\n\n```python\nspecific_include_rules = {\n  \".*\\.cc\": [\n    \"+brave/components/content_settings/core/common\",\n  ],\n}\n```\n\nBetter approach?",
+    "choices": [
+      "List each `.cc` file individually under `specific_include_rules` to be explicit",
+      "Add `// nogncheck` to those includes instead, so no DEPS entry is needed",
+      "Move it to `include_rules`; keep `specific_include_rules` for file-specific cases",
+      "Duplicate the rule into a DEPS file in each subdirectory, so every rule sits next to its files"
+    ],
+    "answer": 2,
+    "explain": "Use `include_rules` for includes allowed across a directory. Reserve `specific_include_rules` for edge cases where only specific files may include something."
+  },
+  {
+    "rule": "BS-031",
+    "prompt": "You're adding a new entry to `resource_ids.spec`. How far should you bump the next starting ID?",
+    "choices": [
+      "By 1, the smallest gap needed",
+      "By 10, to align on round numbers",
+      "By 100, to reserve a full block",
+      "By 5, leaving room for additions"
+    ],
+    "answer": 3,
+    "explain": "Bump resource IDs in `resource_ids.spec` by 5, not 1. That leaves room for later additions without conflicting with adjacent entries."
+  },
+  {
+    "rule": "BS-032",
+    "prompt": "A new Mojo service implementation is declared in BUILD.gn as `static_library(\"my_service\")`. What should the reviewer suggest?",
+    "choices": [
+      "Use `component(\"my_service\")` instead",
+      "Use `source_set(\"my_service\")` for faster builds",
+      "Use `shared_library(\"my_service\")` explicitly",
+      "Keep `static_library`; it's correct for services"
+    ],
+    "answer": 0,
+    "explain": "Mojo service targets use `component()` rather than `static_library()`. Components support dynamic linking and are the correct type for service implementations."
+  },
+  {
+    "rule": "BS-033",
+    "prompt": "Code in `components/ai_chat/content/browser/` needs content-layer support in its unit test, so the author puts `associated_link_content_unittest.cc` in `browser/ai_chat/`. Feedback?",
+    "choices": [
+      "Fine — unit tests that need the content layer belong under `//brave/browser`",
+      "Move it into `//chrome/test`, where the content test harnesses already live",
+      "Put the test next to the component, using `content::RenderViewHostTestHarness`",
+      "Turn it into a browser test, which gets content support no matter where it lives"
+    ],
+    "answer": 2,
+    "explain": "Unit tests for `//brave/components` code must not live in `//brave/browser`. Keep them next to the code; `content::RenderViewHostTestHarness` provides content-layer support."
+  },
+  {
+    "rule": "BS-036",
+    "prompt": "Source files include `brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h`, but the DEPS file lists `\"+brave/components/ai_chat/common\"`. The PR passes locally. What's the issue?",
+    "choices": [
+      "None — DEPS paths are matched by prefix, so `ai_chat/common` is close enough",
+      "DEPS must list the exact include path, or the check validates the wrong thing",
+      "DEPS entries for generated headers should name the `.mojom` file, not the directory",
+      "Use `-brave/components/ai_chat` so the rule covers all subpaths at once"
+    ],
+    "answer": 1,
+    "explain": "DEPS allowlist paths must exactly match the `#include` paths. A mismatch (like `common/` vs `core/common/`) means the DEPS check isn't validating the right file."
+  },
+  {
+    "rule": "BS-037",
+    "prompt": "Every target in `components/brave_wallet/test/BUILD.gn` belongs to Wallet, and the whole file is wrapped in `if (enable_brave_wallet) { ... }`. What's the preferred form?",
+    "choices": [
+      "Keep the wrapper; it's the safest option, since nothing can build accidentally",
+      "Wrap each target in its own `if (enable_brave_wallet)` so the guards are local",
+      "Move the targets into a `sources.gni` included conditionally",
+      "Put `assert(enable_brave_wallet)` at the top and drop the wrapper"
+    ],
+    "answer": 3,
+    "explain": "If an entire BUILD.gn file belongs to a feature, put `assert(enable_feature)` at the top instead of wrapping its blocks in conditionals."
+  },
+  {
+    "rule": "BS-038",
+    "prompt": "```gn\nif (kLocalAIModels) {\n  deps += [ \"//brave/components/local_ai/resources\" ]\n}\n```\n\n`kLocalAIModels` is a `base::Feature`, and no `enable_local_ai` build flag exists yet. Best fix?",
+    "choices": [
+      "Create a GN arg named `kLocalAIModels` that mirrors the feature's default state",
+      "Add the dep unconditionally; the runtime feature check handles enablement",
+      "Wrap the dep in `if (!is_ios)` as an approximation of where the feature runs",
+      "Read `base::FeatureList` state from a GN `exec_script` at configure time"
+    ],
+    "answer": 1,
+    "explain": "Runtime feature flags (`base::FeatureList`) can't gate build-time deps. Use a build flag if one exists; otherwise include the dep unconditionally rather than inventing one."
+  },
+  {
+    "rule": "BS-039",
+    "prompt": "`gn check` fails on an include, so a PR changes it to:\n\n```cpp\n#include \"brave/components/foo/bar.h\"  // nogncheck\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — `nogncheck` exists for exactly this case of a conditional include",
+      "Move the include into the `.h` file instead",
+      "Remove `nogncheck` and fix the GN dep so it's correctly conditional",
+      "Set `check_includes = false` on this target rather than per include"
+    ],
+    "answer": 2,
+    "explain": "Don't suppress gn check failures with `nogncheck`; it's a code smell that masks real dependency problems. Fix the underlying GN dep guard instead."
+  },
+  {
+    "rule": "BS-040",
+    "prompt": "```gn\nif (is_mac) {\n  if (enable_tor) {\n    deps += [ \"//brave/components/tor\" ]\n  }\n}\n```\n\nThe C++ include is guarded by `#if BUILDFLAG(ENABLE_TOR)` only. What's the correct GN?",
+    "choices": [
+      "`if (enable_tor) { deps += [ \"//brave/components/tor\" ] }`",
+      "Keep it as is; the extra platform guard is harmless",
+      "`if (is_mac && enable_tor) { deps += [ \"//brave/components/tor\" ] }`",
+      "Add `if (is_mac)` around the C++ include to match"
+    ],
+    "answer": 0,
+    "explain": "Within a target, add deps behind the relevant buildflag only, not nested inside platform guards. The GN guards and C++ guards should always match."
+  },
+  {
+    "rule": "BS-041",
+    "prompt": "```gn\nif (use_blink) {\n  deps += [\n    \"//brave/components/foo/common\",\n    \"//content/public/browser\",\n  ]\n}\n```\n\n`foo/common` is a plain utility needed on every platform. What's the fix?",
+    "choices": [
+      "Nothing — keeping related deps grouped under one guard keeps the BUILD file tidy and readable",
+      "Change the guard to `if (!is_ios)` so Android and desktop both get the two deps",
+      "Move both deps into a `sources.gni` that's included on every platform",
+      "Make `foo/common` unconditional; keep `//content/public/browser` under `use_blink`"
+    ],
+    "answer": 3,
+    "explain": "Put a dep inside a guard only if the dep itself is specific to that condition. Unrelated deps inside guards cause incorrect configurations and missing symbols where the guard is false."
+  },
+  {
+    "rule": "BS-042",
+    "prompt": "Building with `enable_brave_rewards = false` fails because `rewards_service_unittest.cc` no longer compiles. A teammate adds an unconditional dep on `//brave/components/brave_rewards` \"just for tests\". Better fix?",
+    "choices": [
+      "Only add the test to `sources` under `if (enable_brave_rewards)`",
+      "Keep the dep, but mark it `testonly` so it never reaches production builds",
+      "Wrap the whole test file body in `#if BUILDFLAG(ENABLE_BRAVE_REWARDS)`",
+      "Use `nogncheck` on the test's includes"
+    ],
+    "answer": 0,
+    "explain": "When a build flag disables a feature, exclude that feature's tests from the build with GN conditionals, rather than patching deps so disabled-feature tests still compile."
+  },
+  {
+    "rule": "BS-043",
+    "prompt": "You've added a new build flag, defaulting to enabled. `gn_check`, unit tests, and browser tests pass on your default build. What else is required before landing?",
+    "choices": [
+      "Nothing — the default configuration is what ships, so it's what CI must cover",
+      "Only re-run `gn_check` with the flag disabled; tests don't depend on GN args",
+      "Run `gn_check`, unit, component, browser tests, and presubmit with it disabled",
+      "Ask CI to run the full suite with the flag disabled in a follow-up job after merging"
+    ],
+    "answer": 2,
+    "explain": "Validate a new build flag in both states: run `gn_check`, unit, component, and browser tests, and presubmit with the flag enabled AND disabled. Issues often appear only when it's disabled."
+  },
+  {
+    "rule": "BS-044",
+    "prompt": "A settings WebUI imports `SpeedreaderPage` unconditionally and hides it at runtime when `loadTimeData.getBoolean('isSpeedreaderEnabled')` is false. The feature also has a build flag. What should be added?",
+    "choices": [
+      "A second runtime check in the page's constructor, in case `loadTimeData` is stale",
+      "Wrap the import in `// <if expr=\"enable_speedreader\">` ... `// </if>`",
+      "A dynamic `import()` guarded by `loadTimeData` so the module isn't eagerly loaded",
+      "A CSS rule hiding the page when `isSpeedreaderEnabled` is false"
+    ],
+    "answer": 1,
+    "explain": "Use Chromium's UI preprocessor (`<if expr=\"enable_feature\">`) in JS/HTML so feature code is removed from the build when the flag is off, rather than relying only on runtime `loadTimeData` checks."
+  },
+  {
+    "rule": "BS-046",
+    "prompt": "Rewards depends on Wallet. A PR adds fallback code paths so Rewards can still build and run when `enable_brave_wallet = false`. Better approach?",
+    "choices": [
+      "Keep the fallbacks; supporting more build configurations makes Rewards more robust",
+      "Silently force `enable_brave_wallet = true` in Rewards' BUILD.gn when Rewards is on",
+      "Guard Rewards with `if (!is_ios)` to approximate Wallet support",
+      "Add `assert(enable_brave_wallet, \"Rewards requires Wallet\")` in Rewards' BUILD.gn"
+    ],
+    "answer": 3,
+    "explain": "When Feature A depends on Feature B, assert B's build flag when A is enabled, rather than making A work in unsupported configurations."
+  },
+  {
+    "rule": "BS-048",
+    "prompt": "`kOllamaEndpoint = \"http://localhost:11434\"` is defined as a `constexpr char[]` in `model_service.cc`, `ollama_model_fetcher.cc`, and `model_service_unittest.cc`. What's the fix?",
+    "choices": [
+      "Define it once as `inline constexpr` in a shared header",
+      "Keep the copies, but add a comment linking them",
+      "Move it into a pref so all three files read the same value at runtime",
+      "Keep the production copies and delete only the test copy, which can drift"
+    ],
+    "answer": 0,
+    "explain": "Shared constants such as limits, URLs, and keys belong in a common header, so implementation, tests, and other files don't each carry their own copy."
+  },
+  {
+    "rule": "BS-050",
+    "prompt": "A PR adds `kGate3OAuthUrl`, used only by Rewards, to `components/constants/brave_constants.h`. Where should it go?",
+    "choices": [
+      "It's fine there — `brave_constants.h` is where Brave-wide constants live",
+      "In `//brave/browser/brave_constants.h`, next to the other service URLs",
+      "In Rewards' own `common` target, e.g. `brave_rewards/common/constants.h`",
+      "In the `.cc` file that uses it, as a file-local constant in an anonymous namespace"
+    ],
+    "answer": 2,
+    "explain": "`components/constants` is a deprecated dumping ground: never add constants, headers, targets, or deps there. Put constants in the owning component's `common` target."
+  },
+  {
+    "rule": "BS-050",
+    "prompt": "A URL constant is shared by several components, and no single component clearly owns it. Where should it be defined?",
+    "choices": [
+      "In `components/constants`, since it's shared",
+      "In a dedicated `brave_domains` target",
+      "Duplicated in each component that uses it",
+      "In `//chrome/common/url_constants.h` via a patch"
+    ],
+    "answer": 1,
+    "explain": "Never add to `components/constants`. A constant (especially a URL) shared across components with no clear owner goes in a `brave_domains` target."
+  },
+  {
+    "rule": "BS-052",
+    "prompt": "A PR adds `enable_foo = is_nightly && !is_android && is_official_build`, so a feature ships only in Nightly desktop official builds. What's the concern?",
+    "choices": [
+      "None — a compound flag precisely targets the Nightly desktop rollout with no runtime cost",
+      "It should also include `!is_ios`, since iOS isn't covered by `!is_android`",
+      "It should be a runtime feature flag combined with `is_official_build` in C++",
+      "Compound channel/platform/official flags break on branch migration; use separate flags"
+    ],
+    "answer": 3,
+    "explain": "Don't create buildflags that combine channel, platform, and official_build. They break as branches migrate (nightly → beta → release) and are nearly impossible to test locally."
+  },
+  {
+    "rule": "BS-055",
+    "prompt": "`source_set(\"core\")` contains `local_ai_service.{h,cc}` and `internal_helper.{h,cc}`. Consumers should only include `local_ai_service.h`. How do you enforce that?",
+    "choices": [
+      "Move `internal_helper.h` into an `internal/` folder and trust the naming",
+      "Add a comment in `internal_helper.h` saying \"do not include\"",
+      "Add `public = [ \"local_ai_service.h\" ]` to the target",
+      "Set `visibility = [ \":*\" ]` on the whole target"
+    ],
+    "answer": 2,
+    "explain": "List the exposed headers in `public = [...]`. GN then enforces that dependents can only `#include` those headers, keeping implementation details internal."
+  },
+  {
+    "rule": "BS-056",
+    "prompt": "A PR adds a new Brave endpoint that is only contacted after the user opts in. Does it need to go in the HSTS pin list?",
+    "choices": [
+      "Yes — add it to both the pins and HSTS `entries` in `input_file_parsers.cc`",
+      "No — only endpoints contacted without user opt-in need to be pinned",
+      "Only to the HSTS `entries` list; pinning is optional for opt-in endpoints",
+      "No — adding it to the network audit allowlist already covers HSTS and pinning"
+    ],
+    "answer": 0,
+    "explain": "Every new Brave endpoint goes in the HSTS pin list (both the pins and HSTS `entries` in `chromium_src/net/tools/transport_security_state_generator/input_file_parsers.cc`), whether or not it requires opt-in."
+  },
+  {
+    "rule": "BS-057",
+    "prompt": "A PR adds `webui/history/brave_history_embeddings_page_handler.{h,cc}` to `sources` of `source_set(\"ui\")` in `brave/browser/ui/BUILD.gn`. What should the reviewer ask for?",
+    "choices": [
+      "Nothing — `source_set(\"ui\")` is the standard place for browser UI files",
+      "Put them in a lower-level target, e.g. `brave/browser/ui/webui/history/BUILD.gn`",
+      "Add them via a `sources.gni` into upstream `//chrome/browser/ui` instead",
+      "Keep them in `ui`, but guard them with `if (!is_android)` since history is desktop-only"
+    ],
+    "answer": 1,
+    "explain": "Don't add new sources to `source_set(\"ui\")` in `brave/browser/ui/BUILD.gn`. `//chrome/browser/ui` is prone to circular deps, so use a more specific, lower-level target."
+  },
+  {
+    "rule": "BS-057",
+    "prompt": "Moving your files into a new `webui/history` target causes a circular include error with `//chrome/browser/ui`. Which approach is preferred?",
+    "choices": [
+      "Set `check_includes = false` on the new target, since the cycle is only in headers",
+      "Add `// nogncheck` to the offending includes; the link-time deps are still correct",
+      "Move the files back into `source_set(\"ui\")`, where the cycle doesn't arise",
+      "Interface/impl split: headers in the direct dep, impl in a higher-level target"
+    ],
+    "answer": 3,
+    "explain": "Break cycles with the interface/impl pattern, dependency inversion, or templated subclasses. `allow_circular_includes_from`/`sources.gni` is only a temporary last resort; never use `check_includes = false`."
+  },
+  {
+    "rule": "BS-058",
+    "prompt": "A GN `action()` that runs on the build bots passes:\n\n```gn\nargs = [ \"--output=\" + rebase_path(output) ]\n```\n\nWhat's the correct form?",
+    "choices": [
+      "`rebase_path(output, \"/\")`",
+      "`rebase_path(output, root_build_dir)`",
+      "`get_path_info(output, \"abspath\")`",
+      "It's fine as is — absolute paths are the most robust"
+    ],
+    "answer": 1,
+    "explain": "One-argument `rebase_path()` produces a system-absolute path that breaks remote execution and relocated checkouts. Pass the expected base (usually `root_build_dir`) as `new_base`."
+  }
+]

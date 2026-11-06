@@ -1,0 +1,506 @@
+[
+  {
+    "rule": "TI-001",
+    "prompt": "You need to test that clicking Pause while a navigation tool is still running behaves correctly. The real navigation tool finishes at unpredictable times. Best approach?",
+    "choices": [
+      "Use the real tool, but wait a short fixed delay so it's mid-run when you click Pause",
+      "A `MockTool` whose `Execute` stores the callback; click Pause, then run it yourself",
+      "Run the test 10 times in CI and accept it if the large majority of runs pass",
+      "Test only the already-finished case, since the mid-run timing can't be controlled"
+    ],
+    "answer": 1,
+    "explain": "Prefer fakes over real dependencies. A mock that captures the callback lets you control exactly when work completes, so the test is deterministic, faster, and isolated from cascading failures."
+  },
+  {
+    "rule": "TI-002",
+    "prompt": "A test reaches into a class with `EXPECT_EQ(object->private_state_, 42);`. The class has public `IsReady()` and `GetValue()` methods. What should the reviewer suggest?",
+    "choices": [
+      "Make `private_state_` public so the test can read it without friend declarations",
+      "Add a `FRIEND_TEST` so accessing it is legal",
+      "Keep it — checking the internal field is more precise than the public getters",
+      "Assert via the public API: `IsReady()` and `GetValue() == 42`"
+    ],
+    "answer": 3,
+    "explain": "Test the API, not the implementation. Testing through public interfaces lets internals change without breaking tests, and gives other developers accurate usage examples."
+  },
+  {
+    "rule": "TI-003",
+    "prompt": "A browser test checks the `Accept-Language` header on every request. The page loads subresources from several domains, and the test stores a single `std::string expected_header_`. It's flaky. Fix?",
+    "choices": [
+      "Keep a per-domain map of expected values, looked up by the request's `Host`",
+      "Reset `expected_header_` after every request so stale values aren't reused",
+      "Add a short delay before setting the next expected value so requests settle",
+      "Only check the main-frame request, since subresources inherit its headers"
+    ],
+    "answer": 0,
+    "explain": "Subresource requests can arrive out of order, so a single global expected value races. Use per-domain (per-resource) expected values."
+  },
+  {
+    "rule": "TI-004",
+    "prompt": "```cpp\nconst int kThrottleMs = 500;\nWaitForSelectorBlocked();  // may take 200-300ms\nNonBlockingDelay(base::Milliseconds(250));\n// expect still throttled...\n```\n\nThe test flakes. What's the underlying issue and fix?",
+    "choices": [
+      "The 250ms delay overshoots what's left of the window; reduce it to about 50ms instead",
+      "Use `RunUntilIdle()` instead of `NonBlockingDelay` so no wall-clock time passes",
+      "Polling eats into a timer that starts at fetch; use a far larger window, e.g. 2000ms",
+      "Start the throttle timer manually at the beginning of the test, before any polling"
+    ],
+    "answer": 2,
+    "explain": "Throttle timers start when the fetch happens, not when your checks begin, and polling waits consume that window. Use throttle times much larger than the expected polling duration."
+  },
+  {
+    "rule": "TI-006",
+    "prompt": "You've drafted a fix for a flaky test that waits for a DOM update after a renderer IPC. What should you do before finalizing it?",
+    "choices": [
+      "Search Chromium for tests with similar needs and reuse an established pattern",
+      "Run it 50 times locally with `--gtest_repeat`, and ship it if every run is green",
+      "Wrap it in a retry so CI reruns it automatically on an occasional failure",
+      "Disable it on the platforms where it flakes, and file a bug to investigate"
+    ],
+    "answer": 0,
+    "explain": "Before fixing async/timing issues, search the Chromium codebase for similar scenarios and prefer established, event-driven Chromium patterns over novel solutions."
+  },
+  {
+    "rule": "TI-007",
+    "prompt": "Your fix uses a MutationObserver to wait for the DOM to update, an approach copied from Chromium's `service_worker_internals_ui_browsertest.cc`. What should accompany it?",
+    "choices": [
+      "Nothing — a MutationObserver is self-explanatory to anyone reading the code",
+      "A link to a Stack Overflow answer explaining how MutationObserver timing works",
+      "A TODO to replace it with a simple fixed delay once the test is stable",
+      "A comment or commit note pointing at the Chromium file it's copied from"
+    ],
+    "answer": 3,
+    "explain": "When you follow a Chromium pattern, include a reference to it in a code comment or the commit message, so readers can see the precedent."
+  },
+  {
+    "rule": "TI-008",
+    "prompt": "A test contains:\n\n```cpp\ncontent::EvalJs(web_contents, \"window.solana.isConnected\");\n```\n\nWhat should the reviewer flag?",
+    "choices": [
+      "Use `ExecJs` instead, since the script's return value isn't needed here",
+      "Check the result with `EXPECT_EQ(true, content::EvalJs(...))`",
+      "Wrap it in `base::test::RunUntil` so it retries",
+      "Nothing — `EvalJs` fails the test on JS exceptions automatically"
+    ],
+    "answer": 1,
+    "explain": "Always check `EvalJs` results with `EXPECT_TRUE`/`EXPECT_EQ`. An unchecked call swallows errors, so even a gibberish expression would \"pass\"."
+  },
+  {
+    "rule": "TI-009",
+    "prompt": "`production.cc` defines `constexpr base::TimeDelta kCleanupDelay = base::Seconds(30);` and the unit test defines an identical copy so it can advance the mock clock. Better approach?",
+    "choices": [
+      "Hardcode `base::Seconds(30)` directly in the test so it reads self-contained",
+      "Keep both copies, with a comment in each pointing to the other one",
+      "Expose it once as `inline constexpr` in a shared header used by both",
+      "Advance the mock clock by a large value like 1 hour, so the exact delay doesn't matter"
+    ],
+    "answer": 2,
+    "explain": "Don't duplicate constants between production and test code. Expose the value via a shared header so both always agree."
+  },
+  {
+    "rule": "TI-010",
+    "prompt": "A unit test in `//brave/components/...` gets a settings map via `HostContentSettingsMapFactory::GetForProfile(profile)` from `chrome/browser/...`. What's the right fix?",
+    "choices": [
+      "Construct one directly via `base::MakeRefCounted<HostContentSettingsMap>(...)`",
+      "Add the `//chrome/browser` dep with `nogncheck`, since it's only used in tests",
+      "Move the component's test into `//brave/browser`, where profile factories are allowed",
+      "Convert it into a browser test, which provides a real profile and its factories"
+    ],
+    "answer": 0,
+    "explain": "Component unit tests must not depend on `//chrome`. If you need objects normally created by Chrome infrastructure, create them manually in the test."
+  },
+  {
+    "rule": "TI-011",
+    "prompt": "```cpp\nclass BraveTab {\n  FRIEND_TEST_ALL_PREFIXES(BraveTabTest, RenameBasic);\n  FRIEND_TEST_ALL_PREFIXES(BraveTabTest, RenameCancel);\n  FRIEND_TEST_ALL_PREFIXES(BraveTabTest, RenameSubmit);\n  raw_ptr<views::Textfield> rename_textfield_;\n};\n```\n\nAll three tests only need `rename_textfield_`. Preferred approach?",
+    "choices": [
+      "Add one more `FRIEND_TEST_ALL_PREFIXES` for each new test, as the class already does",
+      "Make `rename_textfield_` public, since tests are its only outside users",
+      "Add a `rename_textfield_for_testing()` accessor returning the textfield",
+      "Declare the `BraveTabTest` fixture a `friend class` and forward accessors from it"
+    ],
+    "answer": 2,
+    "explain": "When tests need a single private member, provide a `*_for_testing()` accessor returning a reference, instead of proliferating `FRIEND_TEST` macros."
+  },
+  {
+    "rule": "TI-012",
+    "prompt": "```cpp\nvoid SetUp() override { g_disable_stats_for_testing = true; }\nTEST_F(StatsTest, UpdaterDoesNotReachEndpoint) { ... }\n```\n\nWhat's the problem?",
+    "choices": [
+      "The global should also be reset in `TearDown()`, but otherwise the approach is sound",
+      "The test name is too long and should describe the setup rather than the outcome",
+      "Nothing — disabling stats is the simplest way to verify that no request is made",
+      "It disables the code under test, so it proves nothing; use a mock server instead"
+    ],
+    "answer": 3,
+    "explain": "When using test-only controls (globals, mocks, feature overrides), verify the test still exercises the code path it claims to test. A test that disables the code under test proves nothing."
+  },
+  {
+    "rule": "TI-013",
+    "prompt": "A fixture does `void SetUp() override { g_disable_auto_start = true; }` and has no `TearDown()`. What should be added?",
+    "choices": [
+      "`void TearDown() override { g_disable_auto_start = false; }`",
+      "Nothing — gtest runs each test with freshly initialized globals",
+      "Set it to `false` at the start of every other test that depends on it",
+      "Make `g_disable_auto_start` `thread_local` so it can't leak between tests"
+    ],
+    "answer": 0,
+    "explain": "If `SetUp()` disables functionality via a global, re-enable it in `TearDown()` so state doesn't leak into other tests."
+  },
+  {
+    "rule": "TI-014",
+    "prompt": "A test loops over 30 URLs and runs `EXPECT_EQ(result.status, Status::kSuccess);` for each. When it fails, CI shows only `Expected kSuccess, got kError`. Improvement?",
+    "choices": [
+      "Split it into 30 separate `TEST_F`s, one per URL, so the failing one is named",
+      "Stream context into it: `<< \"Failed for URL: \" << url << \", code: \" << result.code`",
+      "Replace `EXPECT_EQ` with `ASSERT_EQ` so it stops at the first failing URL",
+      "Add `LOG(INFO) << url;` before each check so the log shows the last URL tried"
+    ],
+    "answer": 1,
+    "explain": "Include diagnostic state in assertions using `<<`, so failures can be debugged from the log without rerunning under a debugger."
+  },
+  {
+    "rule": "TI-015",
+    "prompt": "A helper `VerifyTabCount(Browser*, int expected)` is called from 12 places in a browser test. When it fails, the output points only to the `EXPECT_EQ` line inside the helper. Fix?",
+    "choices": [
+      "Inline the helper at every call site so each failure points at its own line",
+      "Add a `LOG(ERROR)` in the helper printing the expected and actual tab counts",
+      "Add a `base::Location` param and use `SCOPED_TRACE(location.ToString())`",
+      "Turn the helper into a macro so `__LINE__` expands at each call site instead"
+    ],
+    "answer": 2,
+    "explain": "Use `SCOPED_TRACE` with a `base::Location` defaulted to `Current()` in browser test helpers, so failure output shows the caller's file and line."
+  },
+  {
+    "rule": "TI-016",
+    "prompt": "A PR adds a new AI tool handler that parses JSON arguments. Its tests cover only well-formed inputs. What should the reviewer request?",
+    "choices": [
+      "Nothing — the happy path is what real users hit, and the model emits valid JSON",
+      "A browser test for the happy path too, so the full tool pipeline is exercised",
+      "A fuzzer instead of unit tests",
+      "Tests for malformed, empty, null, and out-of-range inputs"
+    ],
+    "answer": 3,
+    "explain": "Tool and handler implementations must have unit tests for bad/invalid input (malformed, empty, null, out-of-range), not just happy paths."
+  },
+  {
+    "rule": "TI-017",
+    "prompt": "A refactor moves validation logic from `Parser` into a new `Validator` class. The author deletes an `EXPECT_FALSE(parser.Parse(bad_input))` check that no longer fits. Feedback?",
+    "choices": [
+      "Move that check into the `Validator` tests so coverage doesn't drop",
+      "Fine — the refactor makes the check obsolete, since `Parser` no longer validates",
+      "Keep the old check commented out in the `Parser` tests for future reference",
+      "Leave it to a follow-up PR"
+    ],
+    "answer": 0,
+    "explain": "When refactoring removes a test check, move it to the appropriate new location rather than deleting it. Test coverage should never decrease during a refactor."
+  },
+  {
+    "rule": "TI-018",
+    "prompt": "`GetRecentHistory()` is documented to return most-recent-first. The test checks `results.size() == 3u` and `ContainsUrl(results, ...)` for each URL. What's missing?",
+    "choices": [
+      "A check that no URL appears twice, e.g. by inserting all of them into a `std::set`",
+      "Explicit order checks, e.g. `EXPECT_EQ(results[0].url, \"https://c.com\")`",
+      "A check that `results` isn't empty before calling `ContainsUrl` on it",
+      "Nothing — size plus `ContainsUrl` for each URL fully verifies the content"
+    ],
+    "answer": 1,
+    "explain": "When a function returns ordered data, assert the order explicitly, not just the contents."
+  },
+  {
+    "rule": "TI-020",
+    "prompt": "A test validates a serialized request body:\n\n```cpp\nEXPECT_THAT(json_str, testing::HasSubstr(\"\\\"method\\\":\\\"chain_getBlockHash\\\"\"));\n```\n\nPreferred form?",
+    "choices": [
+      "Build a `base::Value::Dict` by hand with `Set(\"method\", ...)` calls and compare it",
+      "Use `testing::MatchesRegex()` over the whole body so key order and spacing are flexible",
+      "`EXPECT_EQ(actual, base::test::ParseJsonDict(R\"({\"method\":\"chain_getBlockHash\",\"id\":1})\"));`",
+      "Compare raw strings: `EXPECT_EQ(json_str, R\"({\"method\":\"chain_getBlockHash\",\"id\":1})\")`"
+    ],
+    "answer": 2,
+    "explain": "Compare JSON with `base::test::ParseJsonDict()`. Never validate JSON with `HasSubstr`; it's fragile and doesn't check structure. Building dicts by hand is also discouraged."
+  },
+  {
+    "rule": "TI-021",
+    "prompt": "A test for a failed title generation only checks `EXPECT_FALSE(result.has_value());`. On failure, the observer should never be told the title changed. What should be added?",
+    "choices": [
+      "`EXPECT_CALL(observer, OnConversationTitleChanged(_)).WillOnce(Return())`",
+      "A second test for the success path",
+      "Nothing — the error result is enough",
+      "`EXPECT_CALL(observer, OnConversationTitleChanged(_)).Times(0);`"
+    ],
+    "answer": 3,
+    "explain": "On error/failure paths, explicitly verify that side effects which should NOT occur don't happen, e.g. with `.Times(0)`."
+  },
+  {
+    "rule": "TI-022",
+    "prompt": "A deserialization test checks `title` and `url`, but the struct also has `favicon_url` and `description`. Which addition best meets the standard?",
+    "choices": [
+      "Assert every field, and add a test that malformed input fails",
+      "Assert `favicon_url` only, since URL parsing is the field most likely to break",
+      "Compare `ToString()` output to a golden string",
+      "Nothing — secondary fields like `description` aren't worth dedicated assertions"
+    ],
+    "answer": 0,
+    "explain": "Serialization tests must verify ALL fields, including secondary ones like favicon URLs, and should also test deserializing invalid or malformed input."
+  },
+  {
+    "rule": "TI-023",
+    "prompt": "A file has `TEST_F(MyTest, HandleTypeA)`, `HandleTypeB`, and `HandleTypeC`. Each is identical except for the input enum and the expected string. Preferred structure?",
+    "choices": [
+      "Keep separate tests; they're easier to filter and each failure names its case",
+      "A table of `{name, type, expected}` cases with `SCOPED_TRACE(tc.name)`",
+      "Merge them into one test with three back-to-back `EXPECT_EQ` checks",
+      "Use a macro to stamp out the three tests so each still gets its own name"
+    ],
+    "answer": 1,
+    "explain": "For similar scenarios that differ only in inputs and outputs, use parameterized tests: a case table with `SCOPED_TRACE`, or `INSTANTIATE_TEST_SUITE_P` for larger suites."
+  },
+  {
+    "rule": "TI-024",
+    "prompt": "Many tests repeat this pair of lines for every content block:\n\n```cpp\nEXPECT_TRUE(blocks[0]->is_text_content_block());\nEXPECT_EQ(blocks[0]->get_text_content_block()->text, \"hello\");\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Nothing — explicit assertions at each site are more readable than helpers",
+      "Use a macro expanding to both lines, so failures still report the caller's line",
+      "Check only `is_text_content_block()`, and skip the repetitive field comparison",
+      "Extract a helper like `VerifyTextBlock(*blocks[0], \"hello\")`"
+    ],
+    "answer": 3,
+    "explain": "Extract repeated assertion blocks into reusable helper functions, such as `VerifyTextBlock()` and `VerifyImageBlock()`."
+  },
+  {
+    "rule": "TI-025",
+    "prompt": "```cpp\nEXPECT_EQ(map[entry->uuid.value_or(\"\")], expected_content);\n```\n\n`uuid` is a `std::optional<std::string>`. What's the better form?",
+    "choices": [
+      "`EXPECT_TRUE(entry->uuid.has_value());` followed by the same `value_or(\"\")` line",
+      "Use `entry->uuid.value()` directly, which throws if it's empty",
+      "`ASSERT_TRUE(entry->uuid.has_value());` then index with `*entry->uuid`",
+      "`value_or(\"missing\")`, so a missing uuid yields a clearly named, failing lookup"
+    ],
+    "answer": 2,
+    "explain": "Use `ASSERT_TRUE(opt.has_value())` before accessing an optional in tests. A `value_or(\"\")` fallback hides bugs."
+  },
+  {
+    "rule": "TI-026",
+    "prompt": "An action should be blocked while the page is loading and allowed afterwards. The only test is `ActionSucceeds`, which completes loading first and then expects success. What's missing?",
+    "choices": [
+      "A test that it's blocked while loading, alongside the after-loading test",
+      "A browser test version of the same happy path, to exercise real page loading",
+      "A test with a longer loading delay, so the success path is checked under load",
+      "Nothing — the success path already exercises the loading guard implicitly"
+    ],
+    "answer": 0,
+    "explain": "Test both sides of a guard condition: that the behavior is blocked while the guard is active AND that it proceeds once the guard is released."
+  },
+  {
+    "rule": "TI-027",
+    "prompt": "To test error recovery, a test directly sets an object's internal members into a combination that production code can never reach, then asserts recovery works. Feedback?",
+    "choices": [
+      "Good — extreme internal states make recovery tests more thorough than real ones",
+      "Fine, as long as a comment explains which internal state is being forced",
+      "Reach the scenario via production code paths; impossible states prove nothing",
+      "Wrap the setup in `#if DCHECK_IS_ON()` so it never runs in release builds"
+    ],
+    "answer": 2,
+    "explain": "Don't construct states that can't occur in production. Follow the production code path to set up the scenario; impossible-state tests give false confidence."
+  },
+  {
+    "rule": "TI-028",
+    "prompt": "`Fetch()` should be called exactly once during the test:\n\n```cpp\nEXPECT_CALL(mock, Fetch(_)).WillRepeatedly(Return(result));\n```\n\nWhat should change?",
+    "choices": [
+      "Nothing — `WillRepeatedly` is more robust",
+      "Use `ON_CALL` instead of `EXPECT_CALL`",
+      "Add `.Times(testing::AnyNumber())`",
+      "Use `.WillOnce(Return(result))`"
+    ],
+    "answer": 3,
+    "explain": "When a mock method should be called exactly once, use `WillOnce`. `WillRepeatedly` hides bugs where it's called more times than expected."
+  },
+  {
+    "rule": "TI-029",
+    "prompt": "A browser test for \"open link in new tab\" asserts only `EXPECT_TRUE(OpenNewTab(url));`. What should be added?",
+    "choices": [
+      "An `EXPECT_CALL` on a mock tab delegate verifying it was asked to open `url`",
+      "Check the tab count went up by one and the active tab's URL is `url`",
+      "A `RunUntilIdle()` after opening so the new tab has finished loading",
+      "Nothing — `OpenNewTab` returns false whenever the tab fails to open"
+    ],
+    "answer": 1,
+    "explain": "Browser tests should verify observable side effects (the tab actually appeared, the URL actually loaded), not just return values. That catches integration issues unit tests miss."
+  },
+  {
+    "rule": "TI-030",
+    "prompt": "A bug-fix PR corrects an off-by-one in tab restore. The author says existing tests pass, so no new test is needed. Response?",
+    "choices": [
+      "Add a test that fails without the fix and passes with it",
+      "Agree — passing existing tests shows nothing regressed",
+      "Ask for a manual QA note in the PR description covering the restore case",
+      "A follow-up issue to add a test later is enough for a small off-by-one"
+    ],
+    "answer": 0,
+    "explain": "Every bug-fix PR should include a test reproducing the specific bug. It should fail without the fix and pass with it, guarding against regressions."
+  },
+  {
+    "rule": "TI-033",
+    "prompt": "You fixed a flaky `FooTest.HandlesReload` and verified it with `--gtest_filter=FooTest.HandlesReload`. The file also has `FooTest` and `FooIncognitoTest` fixtures with other tests. What's next?",
+    "choices": [
+      "Ship it — the target test passes",
+      "Run only the other `FooTest.*` tests",
+      "Run every test in the file, across all fixtures",
+      "Run the full browser_tests suite on one platform"
+    ],
+    "answer": 2,
+    "explain": "When fixing a test, run all tests in the same file across every fixture, not just the one you changed, to catch interactions between tests that share fixtures."
+  },
+  {
+    "rule": "TI-034",
+    "prompt": "```cpp\nauto* item = model->GetItem(0);\nEXPECT_TRUE(item != nullptr);\nitem->DoSomething();\n```\n\nWhat's the issue?",
+    "choices": [
+      "Use `EXPECT_NE(item, nullptr)` so the failure message prints the pointer",
+      "Use `ASSERT_TRUE`/`ASSERT_NE`, since the next line dereferences `item`",
+      "Wrap `item->DoSomething()` in `if (item)` so a null item can't crash the test",
+      "Nothing — gtest stops the test at the first failed expectation anyway"
+    ],
+    "answer": 1,
+    "explain": "Use fatal `ASSERT_*` for preconditions that later code depends on. A failing `EXPECT_*` keeps running and can crash on null or cause confusing secondary failures."
+  },
+  {
+    "rule": "TI-035",
+    "prompt": "A database class uses `SEQUENCE_CHECKER(sequence_checker_)`. In mock-based tests it's constructed on one sequence and used on another, so the sequence checks fail. Fix?",
+    "choices": [
+      "Remove the sequence checker, since production only ever uses one sequence",
+      "Construct the object on the same sequence it's used on in every test",
+      "Wrap the checks in `#if !defined(UNIT_TEST)` so they only run in production",
+      "Call `DETACH_FROM_SEQUENCE(sequence_checker_)` in the constructor"
+    ],
+    "answer": 3,
+    "explain": "Database classes with a `SEQUENCE_CHECKER` should call `DETACH_FROM_SEQUENCE` in their constructor, so the checker binds to whichever sequence first uses the object."
+  },
+  {
+    "rule": "TI-036",
+    "prompt": "```cpp\nclass MyUtilsTest : public testing::Test {};\n\nTEST_F(MyUtilsTest, ParsesValidInput) {\n  EXPECT_EQ(Parse(\"abc\"), \"abc\");\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Drop the empty fixture and use `TEST(MyUtilsTest, ParsesValidInput)`",
+      "Add an empty `SetUp()` override so using `TEST_F` is justified",
+      "Switch to `TEST_P` so more inputs can be added later without restructuring",
+      "Nothing — `TEST_F` is always preferred, since a fixture may be needed later"
+    ],
+    "answer": 0,
+    "explain": "If the fixture adds no members, `SetUp()`, or `TearDown()`, use plain `TEST()`. `TEST_F` is only needed when the fixture provides shared state."
+  },
+  {
+    "rule": "TI-037",
+    "prompt": "A test server handler serves `/api/v1` and `return nullptr;` for everything else. A code change starts hitting `/api/v2`, and the test fails mysteriously much later. Better default branch?",
+    "choices": [
+      "Return a 404 response so the client sees a realistic error for unknown paths",
+      "`LOG(WARNING) << request.relative_url << request.content;` then return `nullptr`",
+      "`NOTREACHED() << \"Unhandled: \" << request.relative_url << request.content;`",
+      "Return an empty 200 response so the code under test keeps going"
+    ],
+    "answer": 2,
+    "explain": "Make the default handler in mock servers/interceptors `NOTREACHED() << request.content`, so unhandled requests fail loudly and the message includes the body for debugging."
+  },
+  {
+    "rule": "TI-038",
+    "prompt": "Which test name follows the standard?",
+    "choices": [
+      "`TEST_F(WalletServiceTest, TestSend)`",
+      "`TEST_F(WalletServiceTest, WalletServiceSendTransactionTest1)`",
+      "`TEST_F(WalletServiceTest, SendErr2)`",
+      "`TEST_F(WalletServiceTest, SendFailsOnInsufficientBalance)`"
+    ],
+    "answer": 3,
+    "explain": "Test names should be long and descriptive enough to explain the scenario without reading the body. Don't trade clarity for shorter names."
+  },
+  {
+    "rule": "TI-039",
+    "prompt": "A PR adds new ranking logic with several branches but no tests. The author says it's \"too hard to test because it calls the network directly; we'll add tests later.\" Best response?",
+    "choices": [
+      "Accept it — tests can land in a follow-up once the ranking logic stabilizes",
+      "Ask for a refactor for testability (pure logic, injected deps), plus tests",
+      "Ask for a browser test that exercises the ranking against the real network",
+      "Accept it if overall project coverage stays above the 80% threshold"
+    ],
+    "answer": 1,
+    "explain": "Code that can be tested should be tested. If it's hard to test, suggest refactors that improve testability (pure functions, dependency injection, separating I/O) rather than accepting untested code."
+  },
+  {
+    "rule": "TI-039",
+    "prompt": "A PR adds a settings toggle wired straight to a pref, with no other logic. A reviewer blocks it for lacking a dedicated test. Is that right?",
+    "choices": [
+      "Yes — every PR that changes user-visible behavior needs at least one new test",
+      "Yes — coverage must reach 90%+ on touched lines, including UI wiring",
+      "Only if the pref is synced, since sync makes the toggle's effects cross-device",
+      "No — trivial UI with no meaningful logic doesn't need a dedicated test"
+    ],
+    "answer": 3,
+    "explain": "Use judgment: never require a dedicated test for trivial UI with no meaningful logic (like a toggle wired to a pref), or when the change follows an existing untested pattern."
+  },
+  {
+    "rule": "TI-040",
+    "prompt": "You override `components/foo/foo_service.cc` via `chromium_src` and want test coverage. What's the recommended approach?",
+    "choices": [
+      "Override the upstream unittest in `chromium_src`, `#include` it, then add Brave `TEST_F`s",
+      "Copy the upstream test file into brave and edit it to match the override",
+      "Write only Brave-specific tests in a new standalone fixture, unrelated to upstream's tests",
+      "Rely on upstream CI, since the upstream tests already exercise `foo_service.cc`"
+    ],
+    "answer": 0,
+    "explain": "Use the chromium_src include pattern: include the upstream test file so all upstream tests run against your override, then add Brave-specific tests reusing upstream fixtures."
+  },
+  {
+    "rule": "TI-041",
+    "prompt": "A class's behavior depends on three `base::Feature` flags (`kFlagA`, `kFlagB`, `kFlagC`). How should you cover the interactions?",
+    "choices": [
+      "Write three tests, each enabling one flag, since each flag is independent",
+      "Test with all flags on and with all flags off, the two extremes that matter",
+      "A value-parameterized test over `testing::Range<size_t>(0, 1 << 3)`, one bit per flag",
+      "Rely on the default flag states, and add a test whenever one of the defaults changes"
+    ],
+    "answer": 2,
+    "explain": "For multiple feature flags, use value-parameterized tests that cover all 2^N combinations, encoding each combination as a bitmask where bit `i` enables feature `i`."
+  },
+  {
+    "rule": "TI-042",
+    "prompt": "Your PR flips `kMyCache` to enabled-by-default. You notice `MyCachingTest()` calls `feature_list_.InitAndEnableFeature(kMyCache)`, which is now \"redundant\". What should you do?",
+    "choices": [
+      "Remove it — the compiled-in default now enables `kMyCache`, so it's dead code",
+      "Keep it pinned (or parameterize both states); don't rely on the default",
+      "Remove it, and add a helper that simulates the old default's behavior",
+      "Move it into `TearDown()` so it restores state after each test"
+    ],
+    "answer": 1,
+    "explain": "Tests must never rely on a `base::Feature`'s compiled-in default. Pin every flag the test depends on, or parameterize over both states, so a future default flip can't silently change coverage."
+  },
+  {
+    "rule": "TI-042",
+    "prompt": "A parameterized fixture needs `ScopedFeatureList` set from `GetParam()`. Where should it be initialized?",
+    "choices": [
+      "At the end of `SetUp()`, after members are created, so `GetParam()` is valid",
+      "In each `TEST_P` body, right before the code under test reads the flag value",
+      "In `TearDown()`, so the overrides are scoped to a single test",
+      "In the fixture constructor, before anything that reads the flag is constructed"
+    ],
+    "answer": 3,
+    "explain": "Initialize `ScopedFeatureList` in the fixture constructor, which runs before `SetUp()` and can already call `GetParam()`. That way nothing that reads the flag is constructed first."
+  },
+  {
+    "rule": "TI-043",
+    "prompt": "You run `brave_browser_tests --gtest_filter='AIChatPDFOCRBrowserTest.*'` and get:\n\n```\nWARNING: No matching tests to run.\nSUCCESS: all tests passed.\nTests took 0 seconds.\n```\n\nWhat should you conclude?",
+    "choices": [
+      "Nothing ran; check `--gtest_list_tests`, the target may be compiled out",
+      "The tests passed; the warning is cosmetic when the filter uses a wildcard",
+      "The tests are flaky on this machine and gtest skipped them automatically",
+      "The filter was ignored, so gtest ran and passed the full suite instead"
+    ],
+    "answer": 0,
+    "explain": "A filter that matches nothing still reports success and exits 0. Before trusting a pass, confirm the tests exist with `--gtest_list_tests` and look for `[ RUN ]`/`[ OK ]` lines with a non-zero duration."
+  },
+  {
+    "rule": "TI-043",
+    "prompt": "`MyCachingTest` is instantiated with `INSTANTIATE_TEST_SUITE_P(All, MyCachingTest, testing::Bool(), ...)`. Which filter actually runs its tests?",
+    "choices": [
+      "`--gtest_filter='MyCachingTest.*'`",
+      "`--gtest_filter='MyCachingTest/*'`",
+      "`--gtest_filter='All/MyCachingTest.*'`",
+      "`--gtest_filter='MyCachingTest.NotifiesWhenReady'`"
+    ],
+    "answer": 2,
+    "explain": "Parameterized suites need the instantiation prefix (`All/MyCachingTest.*`). A bare fixture-name filter matches nothing and still reports success."
+  }
+]

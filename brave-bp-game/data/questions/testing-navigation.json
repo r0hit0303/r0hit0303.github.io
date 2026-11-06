@@ -1,0 +1,38 @@
+[
+  {
+    "rule": "TN-001",
+    "prompt": "A test clicks a link to `#section2` (a fragment navigation) and needs to wait for it to commit. It currently uses `content::TestNavigationObserver`, which times out. What should be used?",
+    "choices": [
+      "`base::test::RunUntil()` polling `GetLastCommittedURL()` until it ends in `#section2`",
+      "A `WebContentsObserver` quitting a `RunLoop` on same-document `DidFinishNavigation`",
+      "`TestNavigationObserver` with a larger timeout, since fragment commits are slower",
+      "`content::WaitForLoadStop(web_contents)`, which also covers same-document loads"
+    ],
+    "answer": 1,
+    "explain": "Standard `TestNavigationObserver` skips same-document navigations, and you should NOT use `RunUntil()` polling for them. Use a custom observer that quits on a same-document, non-error `DidFinishNavigation`."
+  },
+  {
+    "rule": "TN-002",
+    "prompt": "A test needs a template URL to be registered for a host before continuing. Which approach is correct?",
+    "choices": [
+      "`ASSERT_TRUE(base::test::RunUntil([&] { return service->GetTemplateURLForHost(host); }))`",
+      "`EvalJs` a script that does `setTimeout(() => {}, 1200)` to give the service time to register",
+      "Sleep the test thread for 1200ms with `base::PlatformThread::Sleep` before checking",
+      "Check once right after navigation; registration happens synchronously during commit"
+    ],
+    "answer": 0,
+    "explain": "Hardcoded JavaScript timeouts are unreliable. Wait for the actual condition in C++ with `base::test::RunUntil`."
+  },
+  {
+    "rule": "TN-003",
+    "prompt": "A Speedreader test does:\n\n```cpp\nNavigateToPageSynchronously(url);\nEXPECT_TRUE(ExecJs(web_contents, \"document.querySelector('.distilled')...\"));\n```\n\nIt is flaky. What's missing?",
+    "choices": [
+      "A `WaitForLoadStop()` call after navigating, before running the script",
+      "Nothing — `NavigateToPageSynchronously` already waits for distillation",
+      "A `WaitDistilled()` call before interacting with distilled content",
+      "Running the script in `ISOLATED_WORLD_ID_BRAVE_INTERNAL` so it sees the page"
+    ],
+    "answer": 2,
+    "explain": "`NavigateToPageSynchronously` only waits for load stop, not distillation. Always call `WaitDistilled()` before touching distilled elements."
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "rule": "DOC-006",
+    "prompt": "You're writing the README for `browser/brave_rewards/`. It already states the directory's purpose. Which section should come next to orient a new developer?",
+    "choices": [
+      "A full list of every file in the directory, sorted alphabetically",
+      "A changelog of recent PRs that touched the directory",
+      "Key files, each with a one-line description of its role",
+      "A copy of the class comments from each header file"
+    ],
+    "answer": 2,
+    "explain": "An orienting README names the key files and their roles (e.g. `rewards_service_impl.cc` is the main implementation, `rewards_service_factory.cc` the profile-keyed factory) rather than dumping everything."
+  },
+  {
+    "rule": "DOC-007",
+    "prompt": "A draft README for the Rewards browser integration has a purpose statement and a key-files list. A reviewer says it's still missing something a newcomer needs. What is most likely missing?",
+    "choices": [
+      "A Usage section showing how to obtain the service",
+      "A full API reference duplicated from the service headers",
+      "A history of why the service was originally designed this way",
+      "Build instructions copied from the main brave-core README"
+    ],
+    "answer": 0,
+    "explain": "A good README covers purpose, key files, how to use the main APIs, and who maintains it. Start with the simplest use case, such as how to obtain the service."
+  },
+  {
+    "rule": "DOC-009",
+    "prompt": "A PR adds this to a Brave component README:\n\n```markdown\n## How to Add a Feature Flag\n\n1. Create a feature in features.h...\n2. Register in about_flags.cc...\n3. Add a histogram entry in enums.xml...\n```\n\nThe steps are copied from Chromium's docs. What should the reviewer say?",
+    "choices": [
+      "Fine, as long as a comment notes which Chromium revision it was copied from",
+      "Fine; having the steps inline saves readers a click to another site",
+      "Move the copied steps into a separate `FEATURE_FLAGS.md` file instead",
+      "Link to the upstream guide instead; a copy will go stale"
+    ],
+    "answer": 3,
+    "explain": "Don't duplicate documentation: copies inevitably drift out of sync. Link to the canonical source instead. (Entries in `docs/best-practices/` are the exception and must be self-contained.)"
+  },
+  {
+    "rule": "DOC-010",
+    "prompt": "In a general project README, which version of a \"How to Add a Feature Flag\" section follows Brave's documentation guidance?",
+    "choices": [
+      "A full step-by-step copy of the Chromium guide, with Brave notes added inline",
+      "A link to the Chromium guide plus the Brave-specific `about_flags.cc` step",
+      "Just a bare link to the Chromium guide, with no other text at all",
+      "A note telling readers to search the Chromium docs for \"feature flag\""
+    ],
+    "answer": 1,
+    "explain": "Link to the canonical source with context: point to Chromium's feature flag guide and add only the Brave-specific note, which is to also register in `brave/browser/about_flags.cc`."
+  }
+]

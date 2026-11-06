@@ -1,0 +1,722 @@
+[
+  {
+    "rule": "ARCH-001",
+    "prompt": "A new helper in `brave/components/foo/` needs to know whether the user is signed in, and the quickest way is to `#include \"brave/browser/...\"`. Which statement about Chromium's layering explains the reviewer's objection?",
+    "choices": [
+      "It's fine as long as the include is guarded by a buildflag that's off on iOS builds",
+      "Dependencies flow downward only; components can't depend on embedder code",
+      "Components may depend on any layer except `//base`",
+      "Only `//content` is off-limits to components; browser-layer includes are allowed"
+    ],
+    "answer": 1,
+    "explain": "Chromium layers (`//base` → core libs → `//content` → `//components` → embedders) allow dependencies **downward only**. `brave/browser/` is the embedder layer, so components can never reach up into it."
+  },
+  {
+    "rule": "ARCH-002",
+    "prompt": "You're reviewing this change in `components/p3a/p3a_service.cc`:\n\n```cpp\nvoid P3AService::Init() {\n  url_loader_factory_ =\n      g_browser_process->shared_url_loader_factory();\n}\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Inject the URL loader factory via `Init()` params instead",
+      "Wrap the call in `#if !BUILDFLAG(IS_IOS)` so it compiles on every platform",
+      "Cache `g_browser_process` in a member to avoid repeated global lookups",
+      "Move the `g_browser_process` call into a lambda so it runs lazily on first use"
+    ],
+    "answer": 0,
+    "explain": "`components/` code must never use `g_browser_process` or depend on `brave/browser/` — that's a layering violation. Pass dependencies in via injection (constructor params, `Init()`, callbacks)."
+  },
+  {
+    "rule": "ARCH-002",
+    "prompt": "A component class currently takes a `Profile*` just to read a couple of prefs. Which signature follows the components layering rules?",
+    "choices": [
+      "`void Init(Profile* profile);` plus an include of `chrome/browser/profiles/profile.h`",
+      "`void Init();` calling `ProfileManager::GetLastUsedProfile()` inside",
+      "`void Init(Browser* browser);` so it can reach the profile and window",
+      "`void Init(PrefService* prefs);`"
+    ],
+    "answer": 3,
+    "explain": "Never use `Profile` in components — pass `PrefService` (via `user_prefs::UserPrefs::Get(browser_context)`) or `BrowserContext` instead, and never include `chrome/browser/` or `brave/browser/` from `components/`."
+  },
+  {
+    "rule": "ARCH-003",
+    "prompt": "```cpp\nBraveExtensionService::BraveExtensionService(Profile* profile)\n    : profile_(profile) {}\n\nvoid BraveExtensionService::OnMalwareListUpdated() {\n  ExtensionSystem* extension_system = ExtensionSystem::Get(profile_);\n  // ...profile_ is only ever used to reach extension_system\n}\n```\n\nWhat's the best review feedback?",
+    "choices": [
+      "Fine as-is — `Profile*` is the standard handle for looking up services",
+      "Store a `Browser*` instead so other services are reachable later",
+      "Inject `ExtensionSystem*` directly; the class only needs that service",
+      "Replace `profile_` with a `raw_ref<Profile>` for memory safety"
+    ],
+    "answer": 2,
+    "explain": "Pass the most specific dependency, not a \"bag of stuff\" object. If `Profile` is only a lookup handle for one service, inject that service instead."
+  },
+  {
+    "rule": "ARCH-004",
+    "prompt": "A teammate wraps every caller like this:\n\n```cpp\n#if BUILDFLAG(BRAVE_REWARDS_ENABLED)\n  auto* rewards_service = RewardsServiceFactory::GetForProfile(profile);\n  rewards_service->DoSomething();\n#endif\n```\n\nWhat does the standard prefer?",
+    "choices": [
+      "Keep the `#if` guards — buildflags are always clearer than runtime checks",
+      "Add a `CHECK(rewards_service)` inside the `#if` block to catch misconfiguration",
+      "Let the factory return null when disabled; callers just null-check",
+      "Move the guard into a macro like `IF_REWARDS(...)` for brevity"
+    ],
+    "answer": 2,
+    "explain": "Prefer internal feature guards: the factory/service returns null or no-ops when disabled. Scattered buildflags at call sites lead to missing deps and maintenance burden."
+  },
+  {
+    "rule": "ARCH-005",
+    "prompt": "```cpp\nvoid Init(network::ResourceRequest& request) {\n  auto shared_request =\n      std::make_shared<network::ResourceRequest>(request);\n  // ...\n}\n```\n\nThe request is owned by another class. What's the right fix?",
+    "choices": [
+      "Keep `std::make_shared` but supply a no-op deleter so it never frees the request",
+      "Use `std::unique_ptr` so ownership is exclusive",
+      "Keep `shared_ptr` — shared ownership is allowed when there's a strong reason",
+      "Take a `const network::ResourceRequest&` and use it directly"
+    ],
+    "answer": 3,
+    "explain": "Don't take ownership of memory you don't own; pass unowned resources by reference or raw pointer. `std::shared_ptr` is banned outright in Chromium — if shared ownership is truly unavoidable, use `scoped_refptr` with `base::RefCounted`, but prefer redesign."
+  },
+  {
+    "rule": "ARCH-006",
+    "prompt": "A new code path calls into the ad-block service from a background task runner, and crash reports start appearing. What's the most relevant guideline?",
+    "choices": [
+      "Service methods are thread-safe by default, so the crash must be coming from elsewhere",
+      "Check which thread the service method expects to be called on",
+      "Wrap the call in a `base::Lock` and it can then run on any thread",
+      "Switch to `base::ThreadPool` so the service runs on more threads"
+    ],
+    "answer": 1,
+    "explain": "Calling service methods from the wrong thread causes crashes. Always check the thread a method expects — especially for ad-block and shields services."
+  },
+  {
+    "rule": "ARCH-007",
+    "prompt": "Which include should a reviewer accept in Rewards code that needs random utilities?",
+    "choices": [
+      "`#include \"brave/components/brave_rewards/core/engine/util/random_util.h\"`",
+      "`#include \"brave/vendor/brave_base/random.h\"`",
+      "`#include \"../../vendor/brave_base/random.h\"` (relative path avoids visibility checks)",
+      "Either works as long as `gn check` passes"
+    ],
+    "answer": 0,
+    "explain": "Never `#include \"brave/vendor/...\"` to reach internal headers — they're not public API, and full paths shouldn't be used to bypass visibility. Use the component's public API header."
+  },
+  {
+    "rule": "ARCH-008",
+    "prompt": "A PR adds a new `PrefObserver` interface with `OnPrefChanged(const std::string&)` so a class can react to `kMyPref` changing. What should the reviewer suggest?",
+    "choices": [
+      "Poll the pref on a repeating timer instead",
+      "Use `pref_change_registrar_.Add(...)` (reusing the superclass's if it has one)",
+      "Keep the custom interface but derive it from `base::CheckedObserver` for safety",
+      "Observe the whole `PrefService` and filter by name in a switch"
+    ],
+    "answer": 1,
+    "explain": "Don't create custom observer interfaces for pref changes — use the existing `pref_change_registrar_` pattern. Also check whether the superclass already has a `pref_change_registrar_` before adding one."
+  },
+  {
+    "rule": "ARCH-009",
+    "prompt": "```cpp\nbool is_opted_in_ = false;\nvoid OnPrefChanged() { is_opted_in_ = prefs_->GetBoolean(kOptedIn); }\nbool IsOptedIn() { return is_opted_in_; }\n```\n\nWhat's the reviewer's best suggestion?",
+    "choices": [
+      "Drop the member and read the pref at call time; don't duplicate pref storage",
+      "Make `is_opted_in_` a `std::atomic<bool>` so reads are thread-safe",
+      "Also initialize `is_opted_in_` from the pref in the constructor so it's never stale",
+      "Keep it — caching prefs is a recommended performance optimization"
+    ],
+    "answer": 0,
+    "explain": "Don't duplicate pref storage. Caching a pref in a member just creates a second source of truth; read the pref when you need it."
+  },
+  {
+    "rule": "ARCH-011",
+    "prompt": "`MyServiceFactory` builds a service that calls into `RewardsService` and `AdsService`. What must the factory constructor include?",
+    "choices": [
+      "Nothing — keyed services are always created in alphabetical order",
+      "A `CHECK` in `BuildServiceInstanceFor` that the other two services already exist",
+      "A `PostTask` that delays creation until the other services are ready",
+      "`DependsOn(...)` calls for both factories' `GetInstance()`"
+    ],
+    "answer": 3,
+    "explain": "If your `KeyedServiceFactory` depends on other services, declare them with `DependsOn` so initialization (and shutdown) order is correct."
+  },
+  {
+    "rule": "ARCH-012",
+    "prompt": "A service should never be active for incognito profiles. A teammate proposes overriding `GetBrowserContextToUse` to redirect incognito to the original profile. What's the preferred approach?",
+    "choices": [
+      "Override `GetBrowserContextToUse` to redirect incognito to the original profile",
+      "Create the service anyway and early-return in each method when off-the-record",
+      "Return null from `GetForProfile` for incognito instead of redirecting",
+      "Put a `NOTREACHED()` in the service constructor for incognito profiles"
+    ],
+    "answer": 2,
+    "explain": "If a service shouldn't be active in incognito, the factory should give back null for that profile rather than overriding `GetBrowserContextToUse` to hand back another context."
+  },
+  {
+    "rule": "ARCH-013",
+    "prompt": "A new component needs to download data files via the component updater. A teammate starts writing a `FooComponentManager` class. What's the standard?",
+    "choices": [
+      "Write the manager — each component should have its own to isolate updates",
+      "Extend `BraveComponentUpdater` with a new subclass per component",
+      "Use a component installer policy — a per-component manager isn't needed",
+      "Download the files directly with a `SimpleURLLoader` instead"
+    ],
+    "answer": 2,
+    "explain": "Components don't need their own component manager — use a component installer policy instead."
+  },
+  {
+    "rule": "ARCH-014",
+    "prompt": "Code in `components/omnibox` needs to ask the browser layer whether autocomplete is enabled, but including browser headers would be a layering violation. What's the recommended design?",
+    "choices": [
+      "An abstract class in components, implemented in browser",
+      "Include the browser header but whitelist it in `DEPS` `specific_include_rules`",
+      "Use `g_browser_process` to fetch the client at runtime",
+      "Move the entire omnibox component into `brave/browser/`"
+    ],
+    "answer": 0,
+    "explain": "When components need browser-layer behavior, define an abstract base class in components and implement it in browser; components then use the abstract type without a layering violation."
+  },
+  {
+    "rule": "ARCH-015",
+    "prompt": "```cpp\ncontent::BrowserContext* GetBrowserContextToUse(\n    content::BrowserContext* context) const override {\n  return context;\n}\n```\n\nThis is in the Rewards service factory. What's wrong?",
+    "choices": [
+      "Nothing — returning the context unchanged is the correct default",
+      "It creates services for incognito; return `nullptr` if off-the-record",
+      "It should return `GetOriginalProfile()` so incognito shares the service",
+      "It must be marked `final` to prevent subclasses overriding it"
+    ],
+    "answer": 1,
+    "explain": "Never initialize services for profile types they shouldn't support (e.g. Rewards in incognito). `GetBrowserContextToUse` must return null for unsupported profile types."
+  },
+  {
+    "rule": "ARCH-016",
+    "prompt": "A PR adds `brave_news::LocaleUtil`, a new singleton that determines the user's locale. `brave_ads::LocaleHelper` already exists. What should the reviewer say?",
+    "choices": [
+      "Fine — each feature should own its own locale logic so teams aren't coupled",
+      "Make the new singleton a `KeyedService` instead",
+      "Copy `LocaleHelper` into `brave_news` so the two can evolve independently",
+      "Reuse the existing `LocaleHelper` rather than duplicating it"
+    ],
+    "answer": 3,
+    "explain": "Check for existing services and singletons before creating new ones — don't duplicate singletons for the same purpose. Prefer observers over adding direct cross-service calls for decoupled notifications."
+  },
+  {
+    "rule": "ARCH-017",
+    "prompt": "Several callers delete Tor's executable like this:\n\n```cpp\nauto path = tor_client_updater()->GetExecutablePath();\nbase::DeleteFile(path);\n```\n\nWhat's the better design?",
+    "choices": [
+      "Add a `Cleanup()` method on the updater and call that",
+      "Add a shared free function `DeleteTorExecutable(path)` in a utils file",
+      "Keep it — each caller knows best when and how its files should be deleted",
+      "Post the `DeleteFile` to a background thread at each call site"
+    ],
+    "answer": 0,
+    "explain": "Cleanup logic belongs in the class that owns the resource. Don't spread cleanup details across multiple callers."
+  },
+  {
+    "rule": "ARCH-018",
+    "prompt": "Where should a new Android-only Rewards native worker file go?",
+    "choices": [
+      "`brave/browser/android/rewards/brave_rewards_native_worker.cc`",
+      "`brave/android/browser/rewards/native/brave_rewards_native_worker_android.cc`",
+      "`brave/browser/android/brave_rewards_native_worker.cc`",
+      "`brave/browser/brave_rewards/android/brave_rewards_native_worker.cc`"
+    ],
+    "answer": 3,
+    "explain": "Group files by component, not by platform: `brave_rewards/android/` beats `android/rewards/`. This keeps related code together, like Chromium's `chrome/browser/history/android/`."
+  },
+  {
+    "rule": "ARCH-019",
+    "prompt": "```gn\nsource_set(\"wallet_api\") {\n  sources = [ \"wallet_api.cc\" ]  # empty stubs when wallet is disabled\n}\n```\n\nWhat does the standard prefer when `brave_wallet_enabled` is false?",
+    "choices": [
+      "Keep it built and have each stub hit `NOTREACHED()` so misuse is caught at runtime",
+      "Wrap the whole target in `if (brave_wallet_enabled) { ... }`",
+      "Keep the declarations but delete the `.cc` from `sources`",
+      "Add a runtime `base::Feature` check inside each stub"
+    ],
+    "answer": 1,
+    "explain": "When a feature is disabled via buildflag, exclude the entire API from the build — don't leave API declarations with no (or empty) implementation."
+  },
+  {
+    "rule": "ARCH-020",
+    "prompt": "A test needs to call `InternalMethod()`, which is private. A PR moves it to `public:`. What should the reviewer suggest?",
+    "choices": [
+      "Make it `protected` and subclass the class inside the test file to reach it",
+      "Make it public but add a `// Visible for testing` comment",
+      "Keep it private and add a `friend` declaration for the test class",
+      "Duplicate the method's logic inside the test"
+    ],
+    "answer": 2,
+    "explain": "Use `friend` declarations instead of making methods public or protected for convenience. (`*ForTesting()` accessors are an accepted Chromium convention and aren't flagged under this rule.)"
+  },
+  {
+    "rule": "ARCH-021",
+    "prompt": "```cpp\nvoid RewardsService::GetRecurringDonations() {\n  ledger->GetRecurringDonations([this](auto list) {\n    for (auto& observer : observers_)\n      observer.OnRecurringDonationsList(list);\n  });\n}\n```\n\nWhat's the issue?",
+    "choices": [
+      "Observers should be notified in reverse registration order",
+      "The lambda should capture a `WeakPtr` instead of `this` — otherwise it's fine as written",
+      "It should notify observers both before and after the query",
+      "Queries should return via a callback; observers are for state changes"
+    ],
+    "answer": 3,
+    "explain": "Callbacks for queries, observers for state changes. A Get/Fetch should return its result via a callback; observers fire only when something is Set, Created, or Deleted."
+  },
+  {
+    "rule": "ARCH-022",
+    "prompt": "A public Rewards header adds:\n\n```cpp\n#include \"brave/components/brave_rewards/core/engine/database/database_publisher_info.h\"\nvoid DoSomething(internal::database::DatabasePublisherInfo info);\n```\n\nWhat should it use instead?",
+    "choices": [
+      "The public Mojo type: `mojom::PublisherInfoPtr`",
+      "A forward declaration of `DatabasePublisherInfo` to avoid the include",
+      "A `void*`, so no internal header needs to be included",
+      "A `std::string` containing serialized JSON of the publisher info"
+    ],
+    "answer": 0,
+    "explain": "Never expose internal implementation types in public component headers; use the component's public API types (e.g. Mojo types)."
+  },
+  {
+    "rule": "ARCH-023",
+    "prompt": "In `brave/components/brave_referrals/BUILD.gn`, which target naming follows the standard?",
+    "choices": [
+      "`source_set(\"referrals\")`, referenced as `//brave/components/brave_referrals:referrals`",
+      "`source_set(\"brave_referrals_lib\")` to make the target name globally unique",
+      "Name it after its directory, e.g. `source_set(\"browser\")` in `browser/`",
+      "Any name, as long as it's listed in `visibility`"
+    ],
+    "answer": 2,
+    "explain": "GN `source_set` names should match their directory name, so paths are predictable (e.g. `//brave/components/brave_referrals/browser`)."
+  },
+  {
+    "rule": "ARCH-024",
+    "prompt": "The rewriter service is never null in production but is null in some unit-test configurations. Which snippet follows the standard?",
+    "choices": [
+      "`if (!service) return;`",
+      "`if (!service) { CHECK_IS_TEST(); return; }`",
+      "`CHECK(service);`",
+      "`if (!service) { LOG(ERROR) << \"null in tests\"; return; }`"
+    ],
+    "answer": 1,
+    "explain": "Use `CHECK_IS_TEST()` before a null early-return when null should only happen in tests. It documents that null isn't a valid production state, unlike an ambiguous bare null check."
+  },
+  {
+    "rule": "ARCH-025",
+    "prompt": "```cpp\nvoid BraveVpnServiceFactory::BuildServiceInstanceFor(...) {\n  auto* manager = BraveVPNConnectionManager::GetInstance();\n  manager->SetInstallSystemServiceCallback(base::BindRepeating(...));\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Call the setter earlier, in `main()`, to avoid initialization-order issues",
+      "Store the callback in a global so any factory can set it",
+      "Pass the callback into the manager's constructor instead of a setter",
+      "Add a `DCHECK` that the callback was set before it's first used"
+    ],
+    "answer": 2,
+    "explain": "Pass dependencies via constructors, not setter callbacks. Constructor injection makes dependencies explicit and avoids confusing initialization ordering."
+  },
+  {
+    "rule": "ARCH-026",
+    "prompt": "A `KeyedService` depends on local state that some unit tests don't provide, and the PR adds `if (!local_state_) return;` to several methods. What's cleaner?",
+    "choices": [
+      "Keep the null checks and add a comment that they're only for tests",
+      "Override `ServiceIsNULLWhileTesting()` to return `true`",
+      "Create a fake local state in production so it's never null",
+      "Override `ServiceIsCreatedWithBrowserContext()` to return `false` in the factory"
+    ],
+    "answer": 1,
+    "explain": "When a keyed service shouldn't be created in unit tests lacking its dependencies, let the factory control it via `ServiceIsNULLWhileTesting()` returning `true` — cleaner than scattered null checks."
+  },
+  {
+    "rule": "ARCH-027",
+    "prompt": "Your service factory returns null for incognito, but a feature wants to work there too:\n\n```cpp\nauto* profile =\n    Profile::FromBrowserContext(context)->GetOriginalProfile();\nauto* service = MyServiceFactory::GetForProfile(profile);\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Don't bypass the factory; call it with the real profile and handle null",
+      "Good workaround — the original profile always has the service",
+      "Use `GetPrimaryOTRProfile()` instead of `GetOriginalProfile()`",
+      "Add a comment explaining why the bypass is needed, then it's fine to merge"
+    ],
+    "answer": 0,
+    "explain": "Never call `GetOriginalProfile()` (or similar) to circumvent factory profile checks. If the factory returns null for a profile type, that profile isn't supposed to use the service."
+  },
+  {
+    "rule": "ARCH-028",
+    "prompt": "A helper must attach to the `WebContents` itself (it also runs on non-tab WebContents), but should be skipped for non-regular profiles and when `kFoo` is disabled. Which approach is recommended?",
+    "choices": [
+      "Always call `CreateForWebContents()` and have every method check the guards",
+      "Make it a `BraveTabFeatures` member, even though it also runs on non-tab contents",
+      "Attach it unconditionally and destroy it in `DidFinishNavigation` if disabled",
+      "A static `MaybeCreateForWebContents()` with the guards"
+    ],
+    "answer": 3,
+    "explain": "For helpers that must live on the `WebContents`, use a static `MaybeCreateForWebContents` with the guards rather than always creating and checking internally. (Pure tab-scoped features go in `BraveTabFeatures` instead.)"
+  },
+  {
+    "rule": "ARCH-029",
+    "prompt": "You're adding a new keyed service factory for desktop. Which base class should it inherit from?",
+    "choices": [
+      "`ProfileKeyedServiceFactory`",
+      "`BrowserContextKeyedServiceFactory`",
+      "`RefcountedBrowserContextKeyedServiceFactory`",
+      "`base::NoDestructor<KeyedServiceFactory>`"
+    ],
+    "answer": 0,
+    "explain": "New desktop keyed service factories should inherit from `ProfileKeyedServiceFactory` rather than the older `BrowserContextKeyedServiceFactory`."
+  },
+  {
+    "rule": "ARCH-030",
+    "prompt": "Which change most clearly warrants a `base::Feature` guard?",
+    "choices": [
+      "A one-line fix for an off-by-one bug in an existing, already-shipped feature",
+      "Renaming a private helper function",
+      "Fixing a typo in a log message",
+      "A large, experimental new service that may need rollback"
+    ],
+    "answer": 3,
+    "explain": "Guard significant or experimental functionality behind `base::Feature` so it can be remotely disabled via Griffin. Use judgment — small, self-contained changes and simple bug fixes typically don't need a flag."
+  },
+  {
+    "rule": "ARCH-031",
+    "prompt": "A feature has `DesktopDelegate` (using `BrowserList`) and `AndroidDelegate` (using `TabModel`) with otherwise identical logic. What's the recommended refactor?",
+    "choices": [
+      "Keep both delegates; platform code should always be fully separate",
+      "One unified delegate; only tab access is platform-specific",
+      "Merge them into one file with `#if BUILDFLAG(IS_ANDROID)` around every method",
+      "Move all the logic to Java and call it from desktop via JNI"
+    ],
+    "answer": 1,
+    "explain": "Unify platform-specific delegates: keep shared logic in one place and extract only the platform-specific bits (like tab access) into the delegate interface."
+  },
+  {
+    "rule": "ARCH-032",
+    "prompt": "```cpp\nFileType GetFileType(const std::string& mime) {\n  if (mime == \"application/pdf\") return FileType::kPDF;\n  return FileType::kImage;\n}\n```\n\nWhat's the reviewer's concern?",
+    "choices": [
+      "It should use a `switch` statement instead of chained `if`s",
+      "`kImage` is a reasonable default since most uploaded files are images anyway",
+      "Unknown types silently become images; return `std::nullopt`",
+      "It should `CHECK` that `mime` is non-empty — otherwise fine"
+    ],
+    "answer": 2,
+    "explain": "Don't silently fall back on unknown types — silent fallbacks mask bugs. Return an explicit error (e.g. `std::nullopt`) and let the caller handle unknown types."
+  },
+  {
+    "rule": "ARCH-033",
+    "prompt": "A Mojo `BookmarksListener` has a single `Changed(BookmarksChange)` event that fires both when the model finishes loading and when bookmarks actually change. Which design follows the standard?",
+    "choices": [
+      "Keep `Changed` and add a `bool is_initial_load` field to the change struct",
+      "Separate `OnBookmarksReady()` and `OnBookmarksChanged()` events",
+      "Fire `Changed` on listener registration too so clients always get data",
+      "Remove the load signal; clients should poll until data appears"
+    ],
+    "answer": 1,
+    "explain": "A Mojo `Changed` event should fire only on actual data changes. Don't conflate lifecycle events (model load, listener registration) with mutations — provide separate events."
+  },
+  {
+    "rule": "ARCH-034",
+    "prompt": "You need to fetch from three services in parallel and run `OnAllComplete` with all results. Which approach does the standard recommend?",
+    "choices": [
+      "A `pending_count_` member that each callback decrements, running `OnAllComplete` at 0",
+      "Chain the fetches sequentially so the last callback has everything",
+      "`base::BarrierCallback<Result>(3, done)` passed to each fetch",
+      "A `base::RepeatingTimer` that polls until all results arrive"
+    ],
+    "answer": 2,
+    "explain": "Use `base::BarrierCallback` to aggregate parallel async results rather than manually tracking completion counts."
+  },
+  {
+    "rule": "ARCH-035",
+    "prompt": "This mojom is used by a component that also targets iOS:\n\n```mojom\nstruct ModelConfig {\n  enum Category { kChat = 0, kCompletion = 1 };\n  Category category;\n};\n```\n\nWhat's the problem?",
+    "choices": [
+      "Enum values must start at 1 in mojom",
+      "Mojom doesn't allow enums inside structs on any platform, so it won't compile",
+      "Nothing — nesting enums is preferred because it scopes the names",
+      "Nested enums break iOS codegen; move the enum to top level"
+    ],
+    "answer": 3,
+    "explain": "Mojom enums must be top-level when the target includes iOS; nested enums produce invalid Objective-C++ (`*.mojom.objc.mm` build failure)."
+  },
+  {
+    "rule": "ARCH-036",
+    "prompt": "`brave_wallet` must build for iOS. A PR adds a method taking `content::WebContents*` to a wallet service. What should the reviewer request?",
+    "choices": [
+      "Pass specific deps like `PrefService*` instead of content types",
+      "Wrap the method in `#if !BUILDFLAG(IS_IOS)` and keep using `content::WebContents*`",
+      "Use `content::BrowserContext*` instead, which is available on iOS",
+      "Add `//content` to the iOS deps of `brave_wallet`"
+    ],
+    "answer": 0,
+    "explain": "Components that build for iOS can't depend on content-layer types (`content::WebContents`, `content::BrowserContext`) because iOS uses WebKit. Pass specific dependencies instead."
+  },
+  {
+    "rule": "ARCH-037",
+    "prompt": "`brave_shields` must work on iOS and on content-based platforms. In the layered structure, which statement is correct?",
+    "choices": [
+      "`core/` may depend on `content/` as long as the iOS build skips those files",
+      "iOS builds pull in both `core/` and `content/`",
+      "Put everything in `content/` and stub it out for iOS",
+      "Business logic lives in `core/`, which has no `//content` deps"
+    ],
+    "answer": 3,
+    "explain": "Use a layered component: `core/` is iOS-compatible with no `//content` deps and holds business logic; `content/` depends on `core/` and `//content`. iOS only builds `core/`."
+  },
+  {
+    "rule": "ARCH-038",
+    "prompt": "Component A depends on component B. A new PR makes B call into a class in A. What's the recommended fix?",
+    "choices": [
+      "Break the cycle with a delegate interface or observer",
+      "Allow it, since GN permits the cycle via `allow_circular_includes_from`",
+      "Merge A and B into a single component",
+      "Use a forward declaration so B doesn't need A's header"
+    ],
+    "answer": 0,
+    "explain": "Component dependencies must form a strict tree — no direct or transitive cycles. Use delegate interfaces or observers to break cycles."
+  },
+  {
+    "rule": "ARCH-039",
+    "prompt": "A new Mojo data decoder service is being added. Where should its implementation live?",
+    "choices": [
+      "In `components/<feature>/browser/` next to its callers",
+      "In a `services/` directory",
+      "In `components/<feature>/renderer/`",
+      "In `brave/browser/<feature>/`"
+    ],
+    "answer": 1,
+    "explain": "Mojo service implementations and data decoders belong in `services/`, not `components/.../browser/`, following Chromium conventions."
+  },
+  {
+    "rule": "ARCH-040",
+    "prompt": "```gn\n# components/services/brave_shields/BUILD.gn\ndeps = [\n  \"//brave/components/brave_shields/core/browser/adblock\",\n]\n```\n\nWhat's wrong, and how is it fixed?",
+    "choices": [
+      "Nothing; everything under `core/` is safe for all processes by definition",
+      "Use `public_deps` instead of `deps`",
+      "Utility code can't use browser code; move it to `common/`",
+      "Move the service itself into `core/browser/`"
+    ],
+    "answer": 2,
+    "explain": "Code running in the utility process must never depend on browser-process code. Anything shared between processes belongs in `common/`, not `browser/`."
+  },
+  {
+    "rule": "ARCH-041",
+    "prompt": "A model-list service holds data that's identical for all profiles and doesn't depend on profile state. A PR adds a `BrowserContextKeyedServiceFactory` for it. What's the preferred design?",
+    "choices": [
+      "Keep the KeyedService for consistency with the other services in the feature",
+      "A `base::NoDestructor` singleton, since there's no per-profile state",
+      "A global `ModelListService* g_model_list = new ModelListService;`",
+      "Store it as user data on each `BrowserContext`"
+    ],
+    "answer": 1,
+    "explain": "When a service has no per-profile state or profile-specific data, use a static singleton with `base::NoDestructor` — a KeyedService adds unnecessary complexity."
+  },
+  {
+    "rule": "ARCH-042",
+    "prompt": "A migration you're writing would clear several user preferences and wipe a local storage directory on upgrade. What should happen before implementation?",
+    "choices": [
+      "Flag the destructive operation for UX review",
+      "Ship it behind a feature flag defaulted on and skip review",
+      "Just log the deletion so it's debuggable later",
+      "Ensure it runs on a background thread so it's unnoticed"
+    ],
+    "answer": 0,
+    "explain": "Operations that delete user data must be flagged for UX review before implementation — silent data deletion is a poor experience and may violate user expectations."
+  },
+  {
+    "rule": "ARCH-043",
+    "prompt": "You fire N parallel async requests and need results in the original request order. Which approach does the standard recommend?",
+    "choices": [
+      "Insert into a `std::map<int, Result>` keyed by index, then copy it out at the end",
+      "`push_back` in each callback, then sort by timestamp",
+      "Pre-size a vector to N and assign each result at its request index",
+      "Issue the requests serially to preserve order"
+    ],
+    "answer": 2,
+    "explain": "For ordered async aggregation, pre-allocate a vector and insert by index rather than using a map and sorting later."
+  },
+  {
+    "rule": "ARCH-044",
+    "prompt": "`mojom::ToolConfig` already has `name` and `description`. A PR adds a C++ `struct ToolConfig { std::string name; std::string description; };` plus conversion code. What should the reviewer say?",
+    "choices": [
+      "Good — C++ business logic should never depend on generated mojom types",
+      "Fine, but put the struct in a `common/` directory",
+      "Add `static_assert`s to keep the two structs in sync",
+      "Use `mojom::ToolConfigPtr` directly"
+    ],
+    "answer": 3,
+    "explain": "When mojom types already describe the data shape, use them in C++ instead of creating redundant structs — duplicates create sync burden and drift risk."
+  },
+  {
+    "rule": "ARCH-045",
+    "prompt": "Which API signature follows the standard for a fetcher with internal caching?",
+    "choices": [
+      "`void FetchData(const std::string& url, Callback cb);`",
+      "`void FetchData(const std::string& url, const std::string& cache_key, Callback cb);`",
+      "`void FetchData(const std::string& url, int cache_slot, Callback cb);`",
+      "`std::string FetchData(const std::string& url, Callback cb);` returning the key"
+    ],
+    "answer": 0,
+    "explain": "Don't expose cache keys in API interfaces. Auto-generate unique keys internally instead of making callers provide or manage them."
+  },
+  {
+    "rule": "ARCH-046",
+    "prompt": "The WebUI wants pinned items shown first, grouped by category. A PR changes the core service to return items in that display order. What's the better approach?",
+    "choices": [
+      "Sort in the core layer so every client automatically gets the same UI ordering",
+      "Keep canonical order in the backend; reorder in the UI",
+      "Add a `display_order` field computed by the backend",
+      "Have the service return two lists: canonical and UI-ordered"
+    ],
+    "answer": 1,
+    "explain": "Data reordering for UI presentation belongs in the client/UI layer. The backend returns data in its canonical order; the frontend transforms it for display."
+  },
+  {
+    "rule": "ARCH-047",
+    "prompt": "A history mojom interface will be consumed by WebUI and native iOS UI. Which name fits the standard?",
+    "choices": [
+      "`interface HistoryPageHandler`",
+      "`interface HistoryWebUIHandler`",
+      "`interface HistoryUIHandler`",
+      "`interface HistoryWebPageBridge`"
+    ],
+    "answer": 2,
+    "explain": "Mojom interfaces that may be used by different UI frameworks should use framework-agnostic names like \"UIHandler\", not web-specific ones like \"PageHandler\"."
+  },
+  {
+    "rule": "ARCH-048",
+    "prompt": "A trusted WebUI page needs to exchange data with an untrusted `chrome-untrusted://` frame it embeds (which doesn't intentionally run untrusted code). What's the recommended channel?",
+    "choices": [
+      "`window.postMessage` with origin checks",
+      "A shared `localStorage` key both frames poll",
+      "URL fragment changes on the iframe",
+      "A mojo interface between the frames"
+    ],
+    "answer": 3,
+    "explain": "Use a mojo interface for trusted/untrusted WebUI communication; Chromium advises against `postMessage` across trust boundaries. Only avoid mojo when the frame intentionally runs untrusted code and minimizing API surface is a deliberate security choice."
+  },
+  {
+    "rule": "ARCH-049",
+    "prompt": "```cpp\nbool IsZCashShieldedTransactionsEnabled() {\n  return IsZCashEnabled() && kShieldedEnabled.Get() &&\n         IsWalletWebUIEnabled();\n}\n```\n\nWhat's the reviewer's concern?",
+    "choices": [
+      "Cache `kShieldedEnabled.Get()` in a function-local static to avoid repeated lookups",
+      "Drop the WebUI check here and gate it in the UI layer",
+      "Reorder the checks so the cheapest runs first",
+      "Also check `IsWalletWebUIEnabled()` in every caller"
+    ],
+    "answer": 1,
+    "explain": "Gate UI restrictions at the UI layer, not in core utility functions. Coupling core logic to UI state causes unexpected test failures and tight coupling."
+  },
+  {
+    "rule": "ARCH-050",
+    "prompt": "An admin disables a feature via policy with ENFORCED enforcement. How should the settings UI behave?",
+    "choices": [
+      "Show the controls greyed out with a managed icon",
+      "Show the controls enabled but ignore user changes",
+      "Hide the feature's UI section entirely",
+      "Show it normally — policy only affects the backend"
+    ],
+    "answer": 2,
+    "explain": "For ENFORCED policy-disabled features, hide the UI entirely rather than just disabling controls. RECOMMENDED policies keep the UI visible since users can override (and macOS `defaults write` creates RECOMMENDED policies)."
+  },
+  {
+    "rule": "ARCH-050",
+    "prompt": "A tester sets a policy with `defaults write` on macOS to disable a feature, and the settings section is still visible. Is that a bug?",
+    "choices": [
+      "No — `defaults write` creates RECOMMENDED policies",
+      "Yes — any managed policy, regardless of level, must hide the UI",
+      "Yes — `defaults write` creates MANDATORY policies, so the section should be hidden",
+      "No — macOS never supports enterprise policies"
+    ],
+    "answer": 0,
+    "explain": "Only ENFORCED policies hide the UI entirely. RECOMMENDED policies keep it visible since the user can override, and on macOS `defaults write` produces RECOMMENDED, not MANDATORY, policies."
+  },
+  {
+    "rule": "ARCH-051",
+    "prompt": "```cpp\nvisual_content_used_percentage_ = new_value;\nOnStateForConversationEntriesChanged();\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Notify before assigning so observers can see the old-to-new transition",
+      "Post the notification asynchronously to batch updates",
+      "Fine — observers should handle redundant notifications themselves",
+      "Store the old value and notify observers only if the value changed"
+    ],
+    "answer": 3,
+    "explain": "Check that the value actually changed before firing state notifications to avoid unnecessary observer calls and re-renders."
+  },
+  {
+    "rule": "ARCH-053",
+    "prompt": "A VPN feature needs a small helper that currently lives inside the Rewards module, and the PR imports the Rewards class directly. What's the recommended approach?",
+    "choices": [
+      "Import it — reusing existing code is always better than any duplication",
+      "Copy the Rewards class into the VPN module",
+      "Make Rewards depend on VPN as well to keep things symmetric",
+      "Extract the helper into a shared utility or interface both can use"
+    ],
+    "answer": 3,
+    "explain": "Feature modules shouldn't import classes from unrelated feature modules. Extract shared functionality into a common utility or abstraction — cross-feature coupling makes features hard to change or remove independently."
+  },
+  {
+    "rule": "ARCH-054",
+    "prompt": "Both Rewards and Wallet need the `gate3` service URL, with no single owner. Where should it live?",
+    "choices": [
+      "In the `brave_domains:urls` target",
+      "As a `kGate3Url` constant duplicated in each component's `constants.h`",
+      "In the legacy `brave_constants.h`",
+      "In Rewards' constants, with Wallet adding a dependency on Rewards"
+    ],
+    "answer": 0,
+    "explain": "Shared URL constants with no clear owner go in `brave_domains:urls` — not duplicated per component and not in legacy `brave_constants.h`. Use `GetServicesDomain()` for environment-aware URLs."
+  },
+  {
+    "rule": "ARCH-055",
+    "prompt": "```mojom\nstruct SearchResult {\n  array<string>? queries;\n};\n```\n\n`null` and `[]` both mean \"no queries\". What should the reviewer suggest?",
+    "choices": [
+      "Keep it optional, since optional arrays are cheaper to serialize over IPC",
+      "Use `map<string, bool>?` instead",
+      "A non-optional `array<string>`; empty means no items",
+      "Add a separate `bool has_queries` field"
+    ],
+    "answer": 2,
+    "explain": "Prefer non-optional arrays in mojom (empty = no items). Only use `array<T>?` when null has a distinct meaning from empty."
+  },
+  {
+    "rule": "ARCH-056",
+    "prompt": "A PR adds a new locale helper class under `brave/components/l10n/`. What's the reviewer's response?",
+    "choices": [
+      "Fine — `components/l10n/` is where all Brave locale-related code is meant to go",
+      "It's deprecated; use Chromium's built-in localization",
+      "Fine, as long as it has unit tests",
+      "Move it to `components/l10n/common/` instead of `browser/`"
+    ],
+    "answer": 1,
+    "explain": "Don't add new code to the deprecated `components/l10n/`. Use Chromium's built-in localization; if no equivalent exists, discuss alternatives first."
+  },
+  {
+    "rule": "ARCH-057",
+    "prompt": "A feature manages per-tab page-action state (e.g. find-in-page-like UI). Which owner is the right scope?",
+    "choices": [
+      "`BrowserWindowFeatures`",
+      "A `BrowserContextKeyedServiceFactory` service",
+      "`GlobalFeatures`",
+      "`TabFeatures` (`BraveTabFeatures`)"
+    ],
+    "answer": 3,
+    "explain": "Every feature belongs to exactly one ownership primitive — Tab, Browser Window, Profile, or Global — and should use the narrowest scope that fits. Per-tab state belongs in `TabFeatures`."
+  },
+  {
+    "rule": "ARCH-057",
+    "prompt": "A browser-window-scoped feature (e.g. a vertical tabs controller) wants to store a per-profile preference cache. What's the problem?",
+    "choices": [
+      "Multiple windows can share a profile; keep profile state out",
+      "None; windows and profiles are always one-to-one",
+      "It should be moved to `GlobalFeatures` so every window and profile can share the cache",
+      "It should store the cache on each tab instead"
+    ],
+    "answer": 0,
+    "explain": "Browser-window features must not hold profile state (multiple windows share a profile), and tab features must not hold window state (tabs move between windows). Profile-scoped data belongs in a keyed service."
+  },
+  {
+    "rule": "ARCH-066",
+    "prompt": "```cpp\nfor (auto& callback : pending_callbacks_) {\n  std::move(callback).Run();  // may add to pending_callbacks_\n}\npending_callbacks_.clear();\n```\n\nWhich fix follows the standard?",
+    "choices": [
+      "Iterate by index (`for (size_t i = 0; i < size(); ++i)`) so growth is safe",
+      "Call `pending_callbacks_.clear()` before the loop",
+      "`std::exchange` the queue into a local, then iterate the local copy",
+      "Reserve extra capacity in `pending_callbacks_` before iterating"
+    ],
+    "answer": 2,
+    "explain": "Swap-and-process: move the queue into a local before iterating. Items added during processing won't corrupt the iteration or cause infinite loops."
+  },
+  {
+    "rule": "ARCH-058",
+    "prompt": "```cpp\nclass FooTabFeature {\n  raw_ptr<Browser> browser_;\n};\n```\n\nWhat's the risk, and the fix?",
+    "choices": [
+      "None; a tab's `Browser` never changes over its lifetime",
+      "Tabs can change windows; hold the `TabInterface` and ask it",
+      "Use `raw_ref<Browser>` instead of `raw_ptr` to prevent nulls",
+      "Store a `BrowserWindowInterface*` instead of `Browser*`, which is the modern API"
+    ],
+    "answer": 1,
+    "explain": "Tab-scoped features must never hold window-level objects (`Browser*` or `BrowserWindowInterface*`) — tabs can be dragged to other windows, causing use-after-free. Hold the tab and ask it for its current window."
+  }
+]

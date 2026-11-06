@@ -1,0 +1,86 @@
+[
+  {
+    "rule": "TUF-000",
+    "prompt": "A test listed in `test/filters/generated/browser_tests-linux.filter` has been fixed upstream and no longer flakes. What do you do?",
+    "choices": [
+      "Delete its line from the generated filter file by hand and note why in the PR",
+      "Add a note to the hand-written `browser_tests.filter` re-enabling it",
+      "Re-run `update-upstream-flake-filters.py` to regenerate the generated files",
+      "Nothing — generated filters are permanent once added, to avoid churn"
+    ],
+    "answer": 2,
+    "explain": "Generated filters come from a script that picks up upstream tests with ≥1% flake rate over 30 days, computed per config. Never hand-edit them; re-run the update script."
+  },
+  {
+    "rule": "TUF-001",
+    "prompt": "An upstream test fails intermittently on Brave CI, and no Brave code is involved. A teammate opens a PR with a patch renaming it to `DISABLED_SignOut`. Best response?",
+    "choices": [
+      "Use an entry in a `test/filters/` file instead of a patch",
+      "Approve — the `DISABLED_` prefix is the standard gtest mechanism for this",
+      "Patch the upstream test's timing logic so the flake is fixed rather than hidden",
+      "Add a `chromium_src` override of the test file that skips it"
+    ],
+    "answer": 0,
+    "explain": "Never patch upstream tests to disable flakes. Filter files are the preferred, trivially reversible mechanism. Only fix upstream test code when Brave's own overrides or patches cause the failure."
+  },
+  {
+    "rule": "TUF-002",
+    "prompt": "`check-upstream-flake.py` reports **Stable upstream** (0.3% flake rate) for a test that keeps failing on Brave CI. What next?",
+    "choices": [
+      "Filter it anyway, noting the 0.3% upstream rate in the filter comment",
+      "Re-run with `--days 60` until the rate crosses the 1% filtering threshold",
+      "Filter it only in a sanitizer-specific filter file to limit its blast radius",
+      "Look for `chromium_src/` overrides or `patches/` that cause the failure"
+    ],
+    "answer": 3,
+    "explain": "With an upstream flake rate below 1%, investigate Brave-specific causes before filtering. If a Brave override or patch is responsible, fix that code instead of hiding it."
+  },
+  {
+    "rule": "TUF-003",
+    "prompt": "LUCI Analysis shows `SomeParameterizedTest/0` and `SomeParameterizedTest/2` are flaky upstream, while `/1` is stable. Which filter entries should you add?",
+    "choices": [
+      "`-SomeParameterizedTest/*`",
+      "`-SomeParameterizedTest/0` and `-SomeParameterizedTest/2`",
+      "`-SomeParameterizedTest/0` only, and wait to see whether `/2` recurs",
+      "`-SomeParameterized*`"
+    ],
+    "answer": 1,
+    "explain": "Don't use wildcards that also suppress stable variants. Check each variant in LUCI and filter only the ones that are actually flaky."
+  },
+  {
+    "rule": "TUF-004",
+    "prompt": "A test failed on Brave's Linux ASan bot. LUCI Analysis shows a 1.6% upstream flake rate that includes failures on non-sanitizer builds. Where should the filter go?",
+    "choices": [
+      "`browser_tests-linux-asan.filter`, since that's the only bot where Brave saw it fail",
+      "Both `browser_tests-linux-asan.filter` and `browser_tests-linux-msan.filter`",
+      "A broader file like `browser_tests.filter`, since it also fails without sanitizers",
+      "Nowhere — at 1.6% the test is stable enough that it should be fixed, not filtered"
+    ],
+    "answer": 2,
+    "explain": "Make the filter as narrow as the evidence supports. When upstream data shows failures outside sanitizer builds, a sanitizer-specific file is too narrow, so use a broader filter file."
+  },
+  {
+    "rule": "TUF-005",
+    "prompt": "Which comment should precede `-WebUIURLLoaderFactoryTest.RangeRequest/*` in a filter file?",
+    "choices": [
+      "`# Flaky on Brave CI; fails intermittently on the Linux and Windows bots.`",
+      "`# Disabled after repeated CI failures on several bots; see the team Slack thread for details.`",
+      "`# Known upstream flake (1.8%/30d, LUCI). Mojo data pipe race: completion before data flush.`",
+      "`# TODO(someone): re-enable once upstream stabilizes range request handling.`"
+    ],
+    "answer": 2,
+    "explain": "Every filter entry needs a comment saying why it's disabled and what triggers the failure. Include the upstream flake rate with its lookback period, and why this file was chosen if that isn't obvious."
+  },
+  {
+    "rule": "TUF-006",
+    "prompt": "Reviewing a filter file (SuiteA's two tests share the same Mojo race condition):\n\n```\n# Various flaky tests\n-SuiteA.Test1\n# Different issue\n-SuiteB.Test2\n-SuiteA.Test2\n```\n\nWhat should change?",
+    "choices": [
+      "Group shared-root-cause tests under one specific comment; blank line between sections",
+      "Nothing — every entry already has a comment somewhere near it, which is all that's required",
+      "Sort all entries alphabetically under a single `# Flaky tests` header for easier diffing",
+      "Move each test into its own filter file so each can be re-enabled independently"
+    ],
+    "answer": 0,
+    "explain": "Group entries by root cause under a single comment section, and give distinct causes their own sections. Always leave a blank line before a new comment section."
+  }
+]

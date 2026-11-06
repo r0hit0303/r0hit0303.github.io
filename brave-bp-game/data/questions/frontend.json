@@ -1,0 +1,314 @@
+[
+  {
+    "rule": "FE-001",
+    "prompt": "A test helper looks like this:\n```tsx\nasync function renderMyComponent(...args: Parameters<typeof render>) {\n  let result\n  await act(async () => { result = render(...args) })\n  return result!\n}\n```\nWhat should the reviewer request?",
+    "choices": [
+      "Take explicit `ui: React.ReactElement, options?: RenderOptions` params, not `...args`",
+      "Nothing; spreading `Parameters<typeof render>` already keeps the helper fully type-safe",
+      "Remove the `act()` wrapper; `render` already wraps itself in `act` internally",
+      "Spread the args into a single props object before forwarding them to `render`"
+    ],
+    "answer": 0,
+    "explain": "Don't spread arbitrary `...args` into `render()`, component props, or other React APIs; it can inject unexpected attributes (an XSS risk). Pass explicit parameters."
+  },
+  {
+    "rule": "FE-002",
+    "prompt": "```tsx\n{items.map((item) => (\n  <AttachmentItem key={item.id}>\n    <div key={item.id}>{item.name}</div>\n  </AttachmentItem>\n))}\n```\nWhat should change?",
+    "choices": [
+      "Remove `key` from `AttachmentItem` and keep it on the `<div>`",
+      "Remove `key` from the inner `<div>`; the list element already has it",
+      "Use the array index as the inner key so it differs from the outer one",
+      "Nothing; keys on both levels make reconciliation more robust"
+    ],
+    "answer": 1,
+    "explain": "Keys belong on the list element. When the parent already sets `key`, redundant keys on inner elements show a misunderstanding of React's reconciliation boundary."
+  },
+  {
+    "rule": "FE-003",
+    "prompt": "A PR adds a pure `groupConversationsByDate()` helper to `conversation_context.tsx`, the file that holds React context state. Best review comment?",
+    "choices": [
+      "Wrap it in `useCallback` so it isn't recreated on every render of the provider",
+      "Export it from the context value so consumers can call it",
+      "Move it to a utility module such as `utils/conversation_history_utils.ts`",
+      "Fine as-is; keeping related logic in the context file aids discoverability"
+    ],
+    "answer": 2,
+    "explain": "Pure utility functions belong in dedicated utility modules. Context files should focus on state management, not data transformation."
+  },
+  {
+    "rule": "FE-004",
+    "prompt": "The attachment UI has `<AttachmentImageItem />`, and you need PDF support. What does the standard suggest?",
+    "choices": [
+      "Add a parallel `<AttachmentDocumentItem />` so each file type stays simple",
+      "Subclass `AttachmentImageItem` for documents",
+      "Render PDFs as images so the existing component works",
+      "Merge them into one generic `<AttachmentUploadItem type={file.type} />`"
+    ],
+    "answer": 3,
+    "explain": "When adding a new file type to upload/attachment UI, merge similar components into a single generic one rather than creating parallel components."
+  },
+  {
+    "rule": "FE-005",
+    "prompt": "A test file starts with:\n```ts\nenum FileType {\n  kImage = 0,\n  kDocument = 1,\n}\n```\n`FileType` is defined in `ai_chat.mojom`. What should the reviewer say?",
+    "choices": [
+      "Import `FileType` from the generated `ai_chat.mojom-webui.js` bindings",
+      "Use a `const` object instead of an enum so it tree-shakes better",
+      "Add a comment noting the values must stay in sync with the mojom",
+      "Move the enum into a shared `test_utils.ts` so other tests can reuse it"
+    ],
+    "answer": 0,
+    "explain": "Don't redefine or duplicate types from generated Mojo bindings in tests; import them from the generated bindings or source files."
+  },
+  {
+    "rule": "FE-006",
+    "prompt": "Which line follows the front-end guidance?",
+    "choices": [
+      "`const count = useMemo(() => items.length, [items])`",
+      "`const count = items.length`",
+      "`const count = useMemo(() => items.length, [items.length])`",
+      "`const count = useCallback(() => items.length, [items])()`"
+    ],
+    "answer": 1,
+    "explain": "Don't wrap trivial property access like `array.length` or `obj.property` in `useMemo`; direct access is cheaper than memoization overhead."
+  },
+  {
+    "rule": "FE-007",
+    "prompt": "```tsx\nfunction UserInfo({ user }: Props) {\n  return <div className='user-info'>{user ? user.name : ''}</div>\n}\n```\nWhat's the preferred rewrite?",
+    "choices": [
+      "Render `<div className='user-info' hidden={!user}>` instead",
+      "Render a `<Placeholder />` when `user` is missing",
+      "`if (!user) return null` before rendering the `<div>`",
+      "Use `{user?.name ?? ''}` to shorten the expression"
+    ],
+    "answer": 2,
+    "explain": "Return `null` early when there's no data, instead of rendering empty containers or placeholder markup that add unnecessary DOM nodes."
+  },
+  {
+    "rule": "FE-008",
+    "prompt": "You're exposing a new Mojo API to React components and need a context plus provider. What should you use?",
+    "choices": [
+      "A hand-written `React.createContext` plus a custom Provider for this API",
+      "A global singleton module that components import directly",
+      "Redux, with the Mojo remote stored in the store",
+      "The `generateReactContext` helper from `$web-common/api/react_api`"
+    ],
+    "answer": 3,
+    "explain": "Use `generateReactContext` from `$web-common/api/react_api` for Mojo API context/provider pairs rather than custom boilerplate per API."
+  },
+  {
+    "rule": "FE-009",
+    "prompt": "Which state update follows the front-end guidance?",
+    "choices": [
+      "`setPartialState({ isLoading: true })`",
+      "`setState({ ...state, isLoading: true })`",
+      "`setState(Object.assign({}, state, { isLoading: true }))`",
+      "`state.isLoading = true; setState(state)`"
+    ],
+    "answer": 0,
+    "explain": "Prefer partial update functions over spreading the whole state object and overriding one field; it's more efficient and less error-prone."
+  },
+  {
+    "rule": "FE-010",
+    "prompt": "Which CSS follows the Leo design system guidance?",
+    "choices": [
+      "`color: var(--leo-color-text-primary, #000);`",
+      "`color: var(--leo-color-text-primary);`",
+      "`color: var(--leo-color-text-primary, inherit);`",
+      "`color: #000; color: var(--leo-color-text-primary);`"
+    ],
+    "answer": 1,
+    "explain": "Never give fallback values for Leo CSS variables. They're guaranteed to be set, and defaults can mask theming bugs."
+  },
+  {
+    "rule": "FE-012",
+    "prompt": "A PR adds a new panel with several tightly-coupled sub-components and one Storybook story that exercises the full panel in its main states. A reviewer wants a story per sub-component. What does the guidance say?",
+    "choices": [
+      "Every new component, including sub-components, needs its own story before merging",
+      "Stories are only required for components in the shared component library",
+      "One integrated story covering the main states is enough; don't insist on more",
+      "Replace the story with snapshot tests, which cover the same states more cheaply"
+    ],
+    "answer": 2,
+    "explain": "New UI should have Storybook stories for its primary visual states, but a single integrated story can suffice. It's a preference, not a requirement; never insist on more stories."
+  },
+  {
+    "rule": "FE-013",
+    "prompt": "```ts\nif (value instanceof mojom.ConversationTurn) {\n  handleTurn(value)\n}\n```\nWhy is this a bug in WebUI code?",
+    "choices": [
+      "`instanceof` is slow on mojom structs; use `typeof value === 'object'` instead",
+      "It works, but mojom types should be compared with `===`",
+      "`ConversationTurn` must be imported from a `.mojom-lite.js` file for `instanceof` to work",
+      "Mojom TS bindings generate interfaces, not classes; use a type guard instead"
+    ],
+    "answer": 3,
+    "explain": "TypeScript WebUI mojom bindings generate interfaces, not classes, so `instanceof` checks don't work. Use type guards or discriminated unions."
+  },
+  {
+    "rule": "FE-014",
+    "prompt": "A new WebUI at `brave://rewards-panel` can't find its resources at runtime. What's the most likely cause?",
+    "choices": [
+      "The files aren't in a top-level `resources/` directory named after the WebUI host",
+      "The resources need a `?v=` cache-busting query string to be served at runtime",
+      "WebUI resources must be inlined into the HTML file by the `grit` build step",
+      "The resources are TypeScript instead of the transpiled JavaScript the loader expects"
+    ],
+    "answer": 0,
+    "explain": "WebUI resource files must be in the top-level directory under `resources/` that matches the WebUI host name; misplaced resources won't be found at runtime."
+  },
+  {
+    "rule": "FE-015",
+    "prompt": "A plain HTML element's only job is to open a help article URL. No design-system component is involved. Which is preferred?",
+    "choices": [
+      "`<button onClick={() => window.open(url)}>Visit</button>`",
+      "`<a href={url} target=\"_blank\" rel=\"noopener\">Visit</a>`",
+      "`<div role=\"link\" onClick={() => location.assign(url)}>Visit</div>`",
+      "`<span onClick={() => window.open(url)}>Visit</span>`"
+    ],
+    "answer": 1,
+    "explain": "Use a real `<a>` link when the only action is navigation; it's semantic and shows the destination on hover. Exception: a Nala/Leo design-system button takes precedence for consistency."
+  },
+  {
+    "rule": "FE-016",
+    "prompt": "```tsx\nconst { rerender } = render(<Counter count={1} />)\nrerender(<Counter count={2} />)\nawait waitFor(() => expect(screen.getByText('2')).toBeInTheDocument())\n```\nWhat should the reviewer suggest?",
+    "choices": [
+      "Increase the `waitFor` timeout so the assertion doesn't flake on CI",
+      "Wrap `rerender` in `setTimeout` before `waitFor`",
+      "Drop `waitFor`; `rerender` is synchronous, so assert directly",
+      "Replace `rerender` with a fresh `render` call"
+    ],
+    "answer": 2,
+    "explain": "`rerender` is synchronous (and `act()` applies pending updates), so `waitFor` isn't needed. Unnecessary `waitFor` slows tests and can mask timing bugs."
+  },
+  {
+    "rule": "FE-017",
+    "prompt": "A rich-text editor component reads `window.getSelection()` to find the caret. The page may show two editors at once. What should the reviewer raise?",
+    "choices": [
+      "Nothing; `window.getSelection()` always refers to the currently focused editor",
+      "Cache the selection in a module-level variable shared by both editors",
+      "Render only one editor per page so the global selection is unambiguous",
+      "Pass a ref to the specific editor rather than reading the global selection"
+    ],
+    "answer": 3,
+    "explain": "For component-scoped operations, consider multiple instances on the page. Pass a ref to the specific instance rather than relying on global state."
+  },
+  {
+    "rule": "FE-018",
+    "prompt": "A component exports this type for consumers:\n```ts\nexport type AttachmentSource =\n  | { kind: 'tab', tabId: number }\n  | { kind: 'file', file: File }\n```\nWhat does the guide require?",
+    "choices": [
+      "A documentation comment explaining the type's purpose",
+      "Converting it to an `interface` so consumers can extend it",
+      "Moving it to a `.d.ts` file",
+      "Nothing; union types are self-documenting"
+    ],
+    "answer": 0,
+    "explain": "Exported TypeScript types meant for use outside the component must have doc comments, especially complex unions and data shapes used as component APIs."
+  },
+  {
+    "rule": "FE-022",
+    "prompt": "A README contains this usage example:\n```tsx\n<div>Hello</div>\n<button onClick={api.reset()}>Reset</button>\n```\nWhat should the reviewer say?",
+    "choices": [
+      "It's illustrative pseudo-code, so validity doesn't matter",
+      "Wrap the siblings in a fragment and use `onClick={() => api.reset()}`",
+      "Only the fragment is missing; `onClick={api.reset()}` is valid JSX as written",
+      "Convert it to plain text so readers don't copy-paste it"
+    ],
+    "answer": 1,
+    "explain": "Documentation code examples must be valid and compilable, because developers copy-paste them. Sibling elements need a fragment, and `onClick={fn()}` invokes immediately."
+  },
+  {
+    "rule": "FE-023",
+    "prompt": "A WebUI page needs a small bit of extra JavaScript. A teammate adds an inline `<script>` tag to the HTML. Best response?",
+    "choices": [
+      "Inline scripts are fine for fewer than 20 lines",
+      "Move it into a separate `.js` file loaded via `<script src>` from the same origin",
+      "Add a TypeScript entry point (e.g. `patches.ts`) to the GN `entry_points`",
+      "Put the code in an `onload` attribute on `<body>`"
+    ],
+    "answer": 2,
+    "explain": "Use compiled TypeScript entry points instead of inline `<script>` tags. You get type checking, code analysis, and consistent bundling; add entry points in the GN build config."
+  },
+  {
+    "rule": "FE-024",
+    "prompt": "A PR adds a new `class SettingsCard extends React.Component` that holds an `isExpanded` state flag. What should the reviewer request?",
+    "choices": [
+      "Convert it to `React.PureComponent` for performance",
+      "Nothing; class components are still fine for simple stateful UI like this",
+      "Move the state into the parent and keep the class",
+      "Rewrite it as a function component with hooks like `useState`"
+    ],
+    "answer": 3,
+    "explain": "Write React components as functions with hooks. The only valid class exception is an error boundary (`componentDidCatch` has no hook equivalent)."
+  },
+  {
+    "rule": "FE-025",
+    "prompt": "A refactor changes `isDirty |= updateFileTimestamps(file)` to a boolean form. `updateFileTimestamps` writes to disk. Which version is correct?",
+    "choices": [
+      "`isDirty = updateFileTimestamps(file) || isDirty`",
+      "`isDirty ||= updateFileTimestamps(file)`",
+      "`isDirty = isDirty || updateFileTimestamps(file)`",
+      "`isDirty = Boolean(isDirty || updateFileTimestamps(file))`"
+    ],
+    "answer": 0,
+    "explain": "`||` short-circuits: once `isDirty` is true, the right side never runs. Put the side-effecting call on the left so it always executes."
+  },
+  {
+    "rule": "FE-026",
+    "prompt": "A WebUI HTML file has:\n```html\n<style>\n  body { background: #111114; }\n</style>\n```\nA PR changes it to `var(--leo-color-container-background)` \"for consistency.\" What should the reviewer say?",
+    "choices": [
+      "Approve; design tokens should always replace hardcoded colors for theming",
+      "Keep the hardcoded value; Leo tokens load async, so the change causes a FOUC",
+      "Approve, but add `#111114` as the `var()` fallback so it never flashes",
+      "Move the style into the TypeScript entry point so it applies with the tokens"
+    ],
+    "answer": 1,
+    "explain": "Keep hardcoded initial body/root colors in WebUI HTML. Tokens like `--leo-color-container-background` load via JavaScript, so using them at first paint causes a flash of unstyled content."
+  },
+  {
+    "rule": "FE-030",
+    "prompt": "A component parses a server-provided config with `useMemo(() => JSON.parse(rawData), [rawData])`. What's the concern?",
+    "choices": [
+      "`useMemo` shouldn't be used for parsing; use `useEffect`",
+      "`JSON.parse` is too slow for render paths; parse the config once on the server",
+      "Malformed JSON throws and crashes the tree; wrap it in `try/catch` with a fallback",
+      "No concern; a React error boundary will catch it and retry the parse on next render"
+    ],
+    "answer": 2,
+    "explain": "`JSON.parse` on external or server data in render paths (including `useMemo`) must be wrapped in `try/catch`; an uncaught `SyntaxError` crashes the whole tree."
+  },
+  {
+    "rule": "FE-027",
+    "prompt": "```tsx\nit('renders', () => {\n  expect(render(<MyComponent />)).toBeTruthy()\n})\n```\nWhat's wrong with this test?",
+    "choices": [
+      "It should use `toBeDefined()` instead, since `toBeTruthy()` coerces the value",
+      "It needs `await`, because `render()` returns a promise in React 18 tests",
+      "Nothing; it's a valid smoke test that catches render-time exceptions",
+      "`render()` always returns a truthy object; assert on rendered content instead"
+    ],
+    "answer": 3,
+    "explain": "`expect(render(...)).toBeTruthy()` tests nothing because `render()` always returns a truthy object. Assert on actual rendered content instead."
+  },
+  {
+    "rule": "FE-028",
+    "prompt": "A news card receives article summaries containing HTML from a third-party feed. A PR renders them with `dangerouslySetInnerHTML`. Best response?",
+    "choices": [
+      "Build known-safe React elements; if raw HTML is unavoidable, sanitize it and get a security review",
+      "Fine, as long as the feed is served over HTTPS from a trusted, contractually vetted partner domain",
+      "Strip `<script>` tags and `on*` attributes with a regex, then use `dangerouslySetInnerHTML`",
+      "Render it inside a sandboxed `<iframe srcdoc>` so any injected script runs isolated from the page"
+    ],
+    "answer": 0,
+    "explain": "Don't use `dangerouslySetInnerHTML` for external or untrusted HTML. Render known-safe elements via React components; if raw HTML is unavoidable, sanitize it and request a security review."
+  },
+  {
+    "rule": "FE-029",
+    "prompt": "```tsx\nuseEffect(() => {\n  fetchData().then(setData)\n}, [])\n```\nWhat does the front-end guide want here?",
+    "choices": [
+      "Add `setData` to the dependency array so the linter's exhaustive-deps rule passes",
+      "Return a cleanup that cancels the request, e.g. via `AbortController.abort()`",
+      "Make the effect callback `async` and `await` the fetch so errors propagate",
+      "Move the fetch into `useMemo` so it runs during render"
+    ],
+    "answer": 1,
+    "explain": "Async work started in `useEffect` must be cleaned up to avoid state updates on unmounted components. Use an `AbortController` or a ref-based cancellation flag."
+  }
+]

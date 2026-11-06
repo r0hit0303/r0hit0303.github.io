@@ -1,0 +1,950 @@
+[
+  {
+    "rule": "IOS-001",
+    "prompt": "Which of these closures should be changed to capture `[weak self]`?\n\n```swift\n// A\ndataSource.onUpdate = { self.reloadData() }\n// B\nTask { await self.fetchData() }\n```",
+    "choices": [
+      "Both A and B — any closure referencing `self` can form a cycle",
+      "Only A — it's stored; the fire-and-forget Task creates no cycle",
+      "Only B — every `Task` must capture `[weak self]` to be safe",
+      "Neither — Swift's ARC breaks closure cycles like these automatically"
+    ],
+    "answer": 1,
+    "explain": "Capture `[weak self]` in closures that outlive the scope (stored closures, callbacks). Fire-and-forget `Task {}` blocks that aren't stored don't create a retain cycle, so don't require it there."
+  },
+  {
+    "rule": "IOS-001",
+    "prompt": "A view controller stores a task:\n\n```swift\nfetchTask = Task {\n  await self.fetchData()\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — Tasks release their captures on completion, so no cycle can form",
+      "Use `[weak self]` and `self?.fetchData()` since the Task is stored",
+      "Use `Task.detached` so the closure doesn't implicitly capture `self`",
+      "Add `[weak self]` to the inner `fetchData` call only, not the Task itself"
+    ],
+    "answer": 1,
+    "explain": "A Task stored as a property that strongly captures `self` is a retain cycle. Apply `[weak self]` to the root/outermost closure."
+  },
+  {
+    "rule": "IOS-002",
+    "prompt": "You're adding a new SwiftUI view model that publishes a list of items. Which declaration follows the standard?",
+    "choices": [
+      "`class ViewModel: ObservableObject { @Published var items: [Item] = [] }`",
+      "`struct ViewModel { @State var items: [Item] = [] }`",
+      "`class ViewModel: ObservableObject { var items: [Item] = [] { willSet { objectWillChange.send() } } }`",
+      "`@Observable class ViewModel { var items: [Item] = [] }`"
+    ],
+    "answer": 3,
+    "explain": "Prefer the `@Observable` macro (Observation framework) over Combine's `ObservableObject`/`@Published` — less boilerplate and better SwiftUI integration."
+  },
+  {
+    "rule": "IOS-003",
+    "prompt": "```swift\n@MainActor\nclass MyViewController: UIViewController {\n  func refresh() {\n    Task { @MainActor in\n      tableView.reloadData()\n    }\n  }\n}\n```\n\nWhat should the reviewer note?",
+    "choices": [
+      "The Task needs `Task.detached { @MainActor in ... }` to avoid inheriting context",
+      "`reloadData()` must be wrapped in `DispatchQueue.main.async` inside the Task",
+      "The Task's `@MainActor` is redundant — it inherits isolation from the class",
+      "Remove `@MainActor` from the class and keep it only on the Task where it's needed"
+    ],
+    "answer": 2,
+    "explain": "Tasks inherit actor isolation from their enclosing context, so `@MainActor` on a Task inside a `@MainActor` type is redundant. Mark UI methods/types `@MainActor` so async callers must await them."
+  },
+  {
+    "rule": "IOS-004",
+    "prompt": "A PR gates a new API like this:\n\n```swift\nif ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17 {\n  useNewAPI()\n}\n```\n\nBest review comment?",
+    "choices": [
+      "Use `if #available(iOS 17, *)` so the compiler enforces availability",
+      "Fine, as long as there's a comment explaining which API needs iOS 17",
+      "Use `UIDevice.current.systemVersion` string comparison for minor versions too",
+      "Wrap it in `@available(iOS 17, *)` on the whole file so callers are gated"
+    ],
+    "answer": 0,
+    "explain": "Use `#available` rather than manual version comparisons — the compiler enforces correctness and warns when deployment targets change."
+  },
+  {
+    "rule": "IOS-005",
+    "prompt": "Which snippet follows the preferred Swift idioms?",
+    "choices": [
+      "`let newest = items.sorted(by: { $0.date > $1.date }).first`",
+      "`for item in items { guard item.isEnabled else { continue }; process(item) }`",
+      "`guard let a = optionalA else { return }` followed by `guard let b = optionalB else { return }`",
+      "`for item in items where item.isEnabled { process(item) }`"
+    ],
+    "answer": 3,
+    "explain": "Prefer concise Swift idioms: `for … where`, `max(by:)`/`min(by:)` instead of `sorted().first`, combined guard conditions, and expression-level `switch`."
+  },
+  {
+    "rule": "IOS-006",
+    "prompt": "```swift\nlet allowedTypes: [String] = [\"image\", \"video\", \"audio\"]\nif allowedTypes.contains(type) { ... }\n```\n\nThis is only ever used for `contains`. What should change?",
+    "choices": [
+      "Declare it as `Set<String>` for O(1) membership testing",
+      "Nothing — arrays are faster for small collections",
+      "Use `allowedTypes.first(where:)` instead of `contains`",
+      "Convert it to an enum with a `rawValue` lookup"
+    ],
+    "answer": 0,
+    "explain": "When the primary operation is membership testing, use `Set` — `Set.contains` is O(1) vs Array's O(n)."
+  },
+  {
+    "rule": "IOS-007",
+    "prompt": "A new framework class is declared `open class TabsBarView`. Nothing outside the module subclasses it. Reviewer feedback?",
+    "choices": [
+      "Keep `open` so future modules can subclass it without a breaking change",
+      "Make it `public` — `open` is only for types external modules subclass",
+      "Make it `internal`; framework types should never be exposed as public API",
+      "Mark it `final open` to allow external use while preventing overrides"
+    ],
+    "answer": 1,
+    "explain": "Default to `public`. `open` is only for when external modules must subclass or override — otherwise it needlessly exposes implementation details."
+  },
+  {
+    "rule": "IOS-008",
+    "prompt": "Which way of creating a `TabType` from a Bool follows the standard?",
+    "choices": [
+      "`static func from(isPrivate: Bool) -> TabType` factory in an extension",
+      "A global function `makeTabType(isPrivate:)` next to the enum definition",
+      "`init(isPrivate: Bool)` assigning `self` in an extension on `TabType`",
+      "`static let make: (Bool) -> TabType` closure property on the enum"
+    ],
+    "answer": 2,
+    "explain": "Prefer convenience initializers on enums over static factory methods — more idiomatic Swift."
+  },
+  {
+    "rule": "IOS-009",
+    "prompt": "```swift\ninit(profile: ProfileIOS, isPrivate: Bool = false) { ... }\n```\n\nEvery caller must consciously decide whether the tab is private. What should the reviewer say?",
+    "choices": [
+      "Remove the default so callers must pass `isPrivate` explicitly",
+      "Fine — defaults reduce boilerplate, and most tabs aren't private anyway",
+      "Change the default to `true` so a forgotten argument is privacy-safe",
+      "Make `isPrivate` an implicitly unwrapped optional so nil means \"unset\""
+    ],
+    "answer": 0,
+    "explain": "Don't provide default values for parameters callers should always specify — it prevents accidental use of an incorrect default."
+  },
+  {
+    "rule": "IOS-010",
+    "prompt": "In a review you see two `var`s that are assigned once and never mutated: one is a stored property on a `final class`, the other is a property on a `struct`. What should you flag?",
+    "choices": [
+      "Both — always use `let` when a value isn't mutated, wherever it's declared",
+      "Neither — `var` is the Swift default for stored properties on any type",
+      "Only the class property; struct mutability is set at the usage site",
+      "Only the struct property; class properties have reference semantics anyway"
+    ],
+    "answer": 2,
+    "explain": "Use `let` for single-assignment properties, but never flag `var` properties on structs — callers control struct mutability with `let`/`var` at the usage site."
+  },
+  {
+    "rule": "IOS-011",
+    "prompt": "```swift\nclass SettingsViewController: UIViewController {\n  var tableView: UITableView!\n  override func viewDidLoad() {\n    super.viewDidLoad()\n    tableView = UITableView()\n  }\n}\n```\n\nWhat's the recommended fix?",
+    "choices": [
+      "Use `lazy var tableView = UITableView()` or init it in the initializer",
+      "Keep it — `viewDidLoad` always runs before any access to `tableView`",
+      "Change it to `weak var tableView: UITableView!` so the view owns it",
+      "Use `unowned var tableView: UITableView` to avoid the optional entirely"
+    ],
+    "answer": 0,
+    "explain": "Avoid implicitly unwrapped optionals for properties set in `viewDidLoad` — they crash if accessed early. Use lazy properties, safe optionals, or initializer setup (use `lazy` when deferring work or needing `self`)."
+  },
+  {
+    "rule": "IOS-012",
+    "prompt": "You're wrapping a callback-based `request.start { result in ... }` API as `async throws`. The request supports `cancel()`. What's the correct structure?",
+    "choices": [
+      "`withCheckedThrowingContinuation` alone — Swift propagates cancellation to the request",
+      "Poll `Task.isCancelled` in a loop while the request runs, calling `request.cancel()`",
+      "Wrap the request in `Task.detached` and cancel that Task from the caller when needed",
+      "Wrap the continuation in `withTaskCancellationHandler`, calling `request.cancel()`"
+    ],
+    "answer": 3,
+    "explain": "When bridging callbacks with `withCheckedContinuation`, use `withTaskCancellationHandler` so Task cancellation propagates to the underlying request."
+  },
+  {
+    "rule": "IOS-013",
+    "prompt": "```swift\nfunc fetchData(from url: URL, _ completionHandler: @escaping () -> Void) {\n  if url.scheme != \"https\" { return }\n  // ... eventually calls completionHandler()\n}\n```\n\nWhat's wrong?",
+    "choices": [
+      "The early return never calls `completionHandler`, so callers hang",
+      "The handler should be `@Sendable` since it escapes to another thread",
+      "Nothing — callers shouldn't be notified about invalid input",
+      "It should throw instead of returning, since non-HTTPS is an error"
+    ],
+    "answer": 0,
+    "explain": "Always call completion handlers on every code path, including error and early returns — otherwise resources leak and callers may wait forever."
+  },
+  {
+    "rule": "IOS-014",
+    "prompt": "A PR injects a script into a tab's web view with `webView.callAsyncJavaScript(...)`. What should the reviewer request?",
+    "choices": [
+      "Switch to `webView.evaluateJavaScript(...)` — it's simpler",
+      "Wrap the call in `DispatchQueue.main.async`",
+      "Use the `evaluateSafeJavaScript` wrapper instead",
+      "Nothing — `callAsyncJavaScript` is the safe API"
+    ],
+    "answer": 2,
+    "explain": "Use `evaluateSafeJavaScript` rather than calling `callAsyncJavaScript` or `evaluateJavaScript` directly — the wrapper provides proper error handling and security checks."
+  },
+  {
+    "rule": "IOS-015",
+    "prompt": "Which error model follows the standard?",
+    "choices": [
+      "`enum FetchError: Int { case networkError = 1; case parseError = 2 }` mapped to codes",
+      "`let kFetchNetworkError = 1` constants returned from the function alongside the result",
+      "`enum FetchError: Error { case networkFailure(URLError); case parseFailure(DecodingError) }`",
+      "Return `nil` from the function and log the error code with `Logger` for debugging"
+    ],
+    "answer": 2,
+    "explain": "Model error states as Swift `Error` types, not integer codes — you get type safety, exhaustive switches, and better debugging."
+  },
+  {
+    "rule": "IOS-016",
+    "prompt": "A new delegate protocol is proposed:\n\n```swift\nprotocol DownloadDelegate: AnyObject {\n  func downloadDidFinish(_ download: Download?)\n}\n```\n\nReviewer feedback?",
+    "choices": [
+      "Make it an implicitly unwrapped `Download!` so delegates can skip the nil check",
+      "Fine — optional parameters are more flexible for future call sites",
+      "Make the parameter non-optional; delegates shouldn't have to handle nil",
+      "Change the protocol to `@objc optional` methods so conformers can opt out"
+    ],
+    "answer": 2,
+    "explain": "Delegate method parameters should be non-optional; the delegate should not need to handle nil values from the delegating object."
+  },
+  {
+    "rule": "IOS-017",
+    "prompt": "The compiler warns \"variable was written to, but never read\" for a value you intentionally keep only for its side effect. What's the preferred fix?",
+    "choices": [
+      "Add `// swiftlint:disable` above it to silence the warning locally",
+      "Assign it to `_` explicitly, e.g. `_ = variable`",
+      "Add a dummy `print(variable)` so the value counts as read",
+      "Mark the variable `@discardableResult` to suppress the warning"
+    ],
+    "answer": 1,
+    "explain": "Use `_ = variable` (assign to `_`) for intentionally unused values — it signals intent and silences the warning."
+  },
+  {
+    "rule": "IOS-018",
+    "prompt": "Which SwiftUI snippet should replace `Text(\"Hello\").cornerRadius(8)`?",
+    "choices": [
+      "`Text(\"Hello\").clipShape(.rect(cornerRadius: 8))`",
+      "`Text(\"Hello\").mask(RoundedRectangle(cornerRadius: 8))`",
+      "`Text(\"Hello\").border(.clear, width: 8)`",
+      "Nothing — `.cornerRadius()` is fine"
+    ],
+    "answer": 0,
+    "explain": "`.cornerRadius()` is deprecated; use `.clipShape(.rect(cornerRadius:))`."
+  },
+  {
+    "rule": "IOS-019",
+    "prompt": "```swift\nText(\"Hello\")\n  .background(Color.blue)\n  .clipShape(RoundedRectangle(cornerRadius: 8))\n```\n\nThe goal is a rounded blue background. Best suggestion?",
+    "choices": [
+      "Use `.cornerRadius(8)` instead of `.clipShape`",
+      "Swap the order of the two modifiers",
+      "Use `.background(.blue, in: .rect(cornerRadius: 8))`",
+      "Wrap it in a `ZStack` with a `RoundedRectangle` behind it"
+    ],
+    "answer": 2,
+    "explain": "Use `.background(_:in:)` with a shape parameter instead of layering `.background()` and `.clipShape()`."
+  },
+  {
+    "rule": "IOS-020",
+    "prompt": "```swift\nVStack {\n  Text(\"Title\").padding(.bottom, 8)\n  Text(\"Subtitle\").padding(.bottom, 8)\n  Text(\"Body\")\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Use `VStack(spacing: 8)` and drop the per-child padding",
+      "Use `Spacer().frame(height: 8)` between each child view",
+      "Move the `.padding(.bottom, 8)` onto the `VStack` itself",
+      "Nothing — per-child padding is more explicit and easier to tweak"
+    ],
+    "answer": 0,
+    "explain": "Use the `spacing` parameter on `VStack`/`HStack` instead of padding each child — cleaner and more maintainable."
+  },
+  {
+    "rule": "IOS-021",
+    "prompt": "A SwiftUI `body` contains a 25-line inline `HStack { ... }` builder for a row header, nested inside a `List`. Reviewer feedback?",
+    "choices": [
+      "Fine as long as the `body` still type-checks quickly",
+      "Extract it into a named `View` struct or computed property",
+      "Wrap it in `AnyView` to help the compiler's type-checking",
+      "Convert it into a `UIViewRepresentable` for better performance"
+    ],
+    "answer": 1,
+    "explain": "When an inline SwiftUI builder block exceeds a few lines, extract it into a named `View` struct or computed property for readability and reuse."
+  },
+  {
+    "rule": "IOS-022",
+    "prompt": "You need to render a SwiftUI view inside a `UITableViewCell`. Which approach does the standard prefer?",
+    "choices": [
+      "Add a `UIHostingController`'s view as a subview of the cell and pin constraints",
+      "Set `cell.contentConfiguration = UIHostingConfiguration { MySwiftUIView(...) }`",
+      "Rewrite the row as a UIKit view, since SwiftUI can't live in table cells",
+      "Wrap the SwiftUI view in a `UIViewRepresentable` and add it to the cell"
+    ],
+    "answer": 1,
+    "explain": "Use `UIHostingConfiguration` for SwiftUI in table/collection view cells instead of manually embedding a `UIHostingController`."
+  },
+  {
+    "rule": "IOS-023",
+    "prompt": "```swift\noverride func layoutSubviews() {\n  super.layoutSubviews()\n  widthConstraint.constant = bounds.width / 2\n}\n```\n\nWhat's the problem?",
+    "choices": [
+      "`super.layoutSubviews()` must be called last, after constraints are updated",
+      "Changing constraints in `layoutSubviews` risks layout loops; set them at setup",
+      "It should call `layoutIfNeeded()` right after changing the constant",
+      "Nothing — `layoutSubviews` is the right place for size-dependent constraints"
+    ],
+    "answer": 1,
+    "explain": "Never create or modify Auto Layout constraints in `layoutSubviews`; it causes infinite layout loops."
+  },
+  {
+    "rule": "IOS-024",
+    "prompt": "After toggling a state that changes a constraint, a PR calls `setNeedsLayout()` followed by `layoutIfNeeded()`. What's the preferred call?",
+    "choices": [
+      "`setNeedsUpdateConstraints()`",
+      "`setNeedsDisplay()`",
+      "`invalidateIntrinsicContentSize()` then `layoutIfNeeded()`",
+      "`view.layoutSubviews()` directly"
+    ],
+    "answer": 0,
+    "explain": "When constraints need to change, call `setNeedsUpdateConstraints()` — the constraint system handles the layout invalidation."
+  },
+  {
+    "rule": "IOS-025",
+    "prompt": "A new screen must keep its bottom toolbar above the keyboard. The PR observes `keyboardWillShowNotification` and adjusts a bottom inset. Best review response?",
+    "choices": [
+      "Also observe `keyboardWillHideNotification` to reset the inset",
+      "Constrain to `view.keyboardLayoutGuide.topAnchor` instead",
+      "Use a fixed 300pt bottom inset when a text field is focused",
+      "Wrap the screen in a `UIScrollView`"
+    ],
+    "answer": 1,
+    "explain": "Use `UIView.keyboardLayoutGuide` for keyboard-responsive layouts rather than manually observing keyboard notifications and adjusting insets."
+  },
+  {
+    "rule": "IOS-027",
+    "prompt": "In a custom Brave panel (not a settings screen), which background color assignment is correct?",
+    "choices": [
+      "`UIColor(braveSystemName: .primary20)`",
+      "`UIColor(red: 0.2, green: 0.4, blue: 0.8, alpha: 1)`",
+      "`UIColor(hex: \"#3366CC\")`",
+      "`.systemBlue`, since system colors support dark mode"
+    ],
+    "answer": 0,
+    "explain": "Use `UIColor(braveSystemName:)` instead of hard-coded colors for design-system consistency and dark mode. System colors are acceptable only in settings-like screens matching iOS default styling."
+  },
+  {
+    "rule": "IOS-028",
+    "prompt": "A PR adds 60 lines of Brave Talk URL-handling logic directly inside `BVC+TabPolicyDecider.swift`. What should the reviewer request?",
+    "choices": [
+      "Move it into a `Tab` helper; keep the policy decider as thin delegation",
+      "Move it into a separate `BVC+BraveTalk.swift` extension on BrowserViewController",
+      "Put it in `TabState` so the Brave Talk handling travels with each tab",
+      "It's fine — URL policy decisions belong in the policy decider file"
+    ],
+    "answer": 0,
+    "explain": "`BVC+TabObserver.swift` and `BVC+TabPolicyDecider.swift` should only contain thin delegation; feature-specific business logic belongs in `Tab` helpers."
+  },
+  {
+    "rule": "IOS-029",
+    "prompt": "```swift\noverride func viewDidLoad() {\n  super.viewDidLoad()\n  setupTableView()       // reads self.dataSource\n  dataSource = makeDataSource()\n}\n```\n\nWhat should change?",
+    "choices": [
+      "Move `super.viewDidLoad()` to the end",
+      "Set `dataSource` before calling `setupTableView()`",
+      "Move `setupTableView()` to `viewDidAppear`",
+      "Make `dataSource` an implicitly unwrapped optional"
+    ],
+    "answer": 1,
+    "explain": "In `viewDidLoad`, set properties before calling setup methods that depend on them — ordering bugs here are common and hard to debug."
+  },
+  {
+    "rule": "IOS-030",
+    "prompt": "A new Objective-C header declares `- (void)loadURL:(NSURL *)url completion:(CompletionBlock)completion;` where completion may be nil. Which header shape follows the standard?",
+    "choices": [
+      "Annotate every pointer with `_Nonnull` individually; no macros",
+      "Wrap in `NS_ASSUME_NONNULL_BEGIN/END` and mark `completion` as `nullable`",
+      "Leave it unannotated — Swift will import pointers as implicitly unwrapped",
+      "Mark the entire interface `nullable`"
+    ],
+    "answer": 1,
+    "explain": "All Obj-C headers should use `NS_ASSUME_NONNULL_BEGIN`/`NS_ASSUME_NONNULL_END` and explicitly annotate nullable parameters."
+  },
+  {
+    "rule": "IOS-031",
+    "prompt": "`BraveUtils` exposes only class methods and should never be instantiated. How should its header prevent instantiation?",
+    "choices": [
+      "Declare `- (instancetype)init NS_UNAVAILABLE;`",
+      "Declare both `init` and `+new` as `NS_UNAVAILABLE` — `new` is required",
+      "Make `init` return `nil` in the implementation",
+      "Add a comment saying not to instantiate it"
+    ],
+    "answer": 0,
+    "explain": "Mark `init` as `NS_UNAVAILABLE` for static-only Obj-C classes. Marking `new` isn't necessary since most usage is from Swift, which doesn't call `new`."
+  },
+  {
+    "rule": "IOS-032",
+    "prompt": "A PR adds `OBJC_EXPORT` to a constant's declaration in the `.h` and again to its definition in the `.mm`. Reviewer feedback?",
+    "choices": [
+      "Correct — it must appear on both the declaration and definition",
+      "Remove it from the header and keep it on the implementation",
+      "Keep it only on the header declaration, not the implementation",
+      "Replace it with `extern \"C\"` in both places for C++ linkage"
+    ],
+    "answer": 2,
+    "explain": "`OBJC_EXPORT` belongs only on the header declaration, not the implementation."
+  },
+  {
+    "rule": "IOS-033",
+    "prompt": "An Obj-C factory method `+ (instancetype)walletServiceWithProfileIOS:(ProfileIOS *)p` imports into Swift with an awkward name. What's the recommended fix?",
+    "choices": [
+      "Add a Swift extension wrapper method with a nicer name",
+      "Rename the Obj-C method itself using C-style naming",
+      "Use `NS_REFINED_FOR_SWIFT` and leave the original hidden",
+      "Annotate the declaration with `NS_SWIFT_NAME(...)`"
+    ],
+    "answer": 3,
+    "explain": "Use `NS_SWIFT_NAME` on Obj-C APIs to provide idiomatic Swift names — especially important for factory methods and C-style names."
+  },
+  {
+    "rule": "IOS-034",
+    "prompt": "```objc\nif (string == @\"expected\") { ... }\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — string literals are interned, so `==` works for constant strings",
+      "Use `[string compare:@\"expected\"] == 0`, which handles nil safely",
+      "Use `isEqualToString:` — `==` compares pointer identity",
+      "Cast both to `const char*` with `UTF8String` and compare via `strcmp`"
+    ],
+    "answer": 2,
+    "explain": "Never use `==`/`!=` for `NSString` comparison; use `isEqualToString:`. `==` compares pointers, not contents."
+  },
+  {
+    "rule": "IOS-035",
+    "prompt": "Inside an `@implementation BraveWalletBridge` (an Obj-C class), how should a local variable holding the account count be named? And what about a member of a C++ class that holds an Obj-C type?",
+    "choices": [
+      "camelCase `accountCount` in Obj-C; `account_count_` in the C++ class",
+      "`account_count` in both — Brave uses Chromium style for all native code",
+      "`accountCount` in both — anything touching Obj-C types uses camelCase",
+      "`kAccountCount` in the Obj-C class; `AccountCount` in the C++ class"
+    ],
+    "answer": 0,
+    "explain": "Use camelCase for Obj-C variables inside Obj-C classes/types; when Obj-C types are used inside C++ classes, follow C++ snake_case conventions."
+  },
+  {
+    "rule": "IOS-037",
+    "prompt": "```objc\n__weak typeof(self) weakSelf = self;\ndispatch_async(queue, ^{\n  [weakSelf doWork];\n});\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Capture `self` strongly — it's a one-shot block, so no cycle can persist",
+      "Promote to a `__strong` `strongSelf` inside the block and bail if nil",
+      "Use `__unsafe_unretained` instead of `__weak` to avoid the weak overhead",
+      "Nothing — messaging a nil `weakSelf` is a safe no-op, so this is fine"
+    ],
+    "answer": 1,
+    "explain": "Do the weak/strong dance in posted tasks: convert `weakSelf` to a strong reference inside the block and bail if nil, so `self` can't vanish mid-use."
+  },
+  {
+    "rule": "IOS-038",
+    "prompt": "A method returns an `NSArray *` property, but internally builds it as `NSMutableArray` and returns the mutable object directly. What's the guidance?",
+    "choices": [
+      "Return `[array copy]`; use `mutableCopy` only when mutability is needed",
+      "Fine — `NSMutableArray` is a subclass of `NSArray`, so the type is honest",
+      "Change the return type to `id` so callers don't assume immutability",
+      "Always return `mutableCopy` so callers can safely modify their own copy"
+    ],
+    "answer": 0,
+    "explain": "Use `copy` for immutable and `mutableCopy` for mutable collections; passing a mutable collection where an immutable one is expected leads to subtle bugs."
+  },
+  {
+    "rule": "IOS-039",
+    "prompt": "A new feature needs the rewards controller and does `let controller = BraveRewardsViewController.shared`. Best review response?",
+    "choices": [
+      "Fine — singletons are the standard way to share long-lived services",
+      "Wrap `.shared` in a lazy property to defer access until first use",
+      "Store `.shared` in a global constant to avoid repeated lookups",
+      "Pass the controller in via the initializer instead"
+    ],
+    "answer": 3,
+    "explain": "No singletons for service access — pass dependencies through initializers, method parameters, or the `Tab`/`TabHelper` extension pattern."
+  },
+  {
+    "rule": "IOS-040",
+    "prompt": "A feature needs to store per-tab data. Which approach is correct?",
+    "choices": [
+      "Add a stored property to `Tab` for each feature's data",
+      "Use `objc_setAssociatedObject` to attach data to the tab",
+      "Use a Tab Helper with the `TabDataValues` pattern",
+      "Keep a global `[TabID: Data]` dictionary in the feature"
+    ],
+    "answer": 2,
+    "explain": "Tab-associated data should use the `TabDataValues` extension pattern, not stored properties or associated objects, for proper lifecycle management."
+  },
+  {
+    "rule": "IOS-041",
+    "prompt": "A PR adds `var playlistItemCount: Int` to `TabState` so the Playlist feature can track it per tab. What should the reviewer say?",
+    "choices": [
+      "Fine — `TabState` is where per-tab data lives, so it belongs there",
+      "Use a Tab Helper with `TabDataValues`; keep `TabState` minimal",
+      "Make it optional so it doesn't affect other features using `TabState`",
+      "Put it in `Preferences` keyed by tab ID so it survives app restarts"
+    ],
+    "answer": 1,
+    "explain": "Don't add feature data to `TabState` — it should remain a minimal model of core tab state. Use a Tab Helper with `TabDataValues`."
+  },
+  {
+    "rule": "IOS-042",
+    "prompt": "A new `WalletViewModel` calls `BraveWallet.shared.keyringService` directly inside its methods. Reviewer feedback?",
+    "choices": [
+      "Fine — view models are the right layer to call SDK singletons",
+      "Move the singleton call into the SwiftUI view to keep the model pure",
+      "Inject the SDK dependency through the view model's initializer",
+      "Cache the singleton in a `static let` to avoid repeated lookups"
+    ],
+    "answer": 2,
+    "explain": "View models must not import or reference SDK singletons directly; pass SDK dependencies through the initializer so they're testable."
+  },
+  {
+    "rule": "IOS-043",
+    "prompt": "A closure registered at startup calls `GetApplicationContext()->...getLastUsedProfile()` each time it fires to get the profile. What's wrong?",
+    "choices": [
+      "The last-used profile can change; pass `ProfileIOS` in explicitly",
+      "Nothing — it always returns the profile that registered the closure",
+      "It should call `getLastUsedProfile()` once and cache it in a static",
+      "It should use the original (non-incognito) profile instead"
+    ],
+    "answer": 0,
+    "explain": "Bind `ProfileIOS` directly into closures and initializers; don't call `getLastUsedProfile` at point of use because the last-used profile can change."
+  },
+  {
+    "rule": "IOS-044",
+    "prompt": "Which approach follows the standard for a feature-flagged event handler?",
+    "choices": [
+      "Register the handler always; start `handle(event:)` with `guard FeatureFlags.isEnabled(.myFeature) else { return }`",
+      "Check the flag in both registration and every handler call",
+      "Read the flag once in `handle(event:)` and cache it",
+      "Only register the handler `if FeatureFlags.isEnabled(.myFeature)`"
+    ],
+    "answer": 3,
+    "explain": "Feature flag checks should gate handler/observer registration, not runtime checks inside the handler — avoiding overhead when the feature is disabled."
+  },
+  {
+    "rule": "IOS-045",
+    "prompt": "A PR adds `var isBraveSearchResultsPage: Bool` to a generic `extension URL` in a shared utilities file. Best response?",
+    "choices": [
+      "Fine — URL extensions are the natural home for URL classification checks",
+      "Make it `fileprivate` in the generic extension to limit its visibility",
+      "Move it into a feature-specific helper, not a generic URL extension",
+      "Move it to the legacy `Shared` module next to the other URL helpers"
+    ],
+    "answer": 2,
+    "explain": "Feature-specific logic doesn't belong in generic utility extensions; create feature-specific helpers instead."
+  },
+  {
+    "rule": "IOS-046",
+    "prompt": "A new iOS feature registers its prefs inside its service's `Init()` method. Where should pref registration go?",
+    "choices": [
+      "In the service's constructor, so it's close to usage",
+      "In `AppDelegate.didFinishLaunching`",
+      "In `browser_prefs.mm`",
+      "In a Swift `Preferences` extension"
+    ],
+    "answer": 2,
+    "explain": "iOS preference registration goes in `browser_prefs.mm`, not arbitrary init methods."
+  },
+  {
+    "rule": "IOS-047",
+    "prompt": "A metric needs the app's install date months after install. A PR reads `Preferences.DAU.installationDate`. What should the reviewer say?",
+    "choices": [
+      "Fine — `Preferences.DAU.installationDate` is the canonical install date",
+      "Use `Preferences.P3A.installationDate`; the DAU one resets after 14 days",
+      "Compute it from the app bundle's creation date via `FileManager`",
+      "Store a new install-date pref in the caches directory on first launch"
+    ],
+    "answer": 1,
+    "explain": "`Preferences.DAU.installationDate` resets after 14 days; use `Preferences.P3A.installationDate` for a persistent installation date."
+  },
+  {
+    "rule": "IOS-048",
+    "prompt": "A C++ observer fires correctly in unit tests, but the Swift UI never updates. The PR added the C++ observer and a Swift delegate protocol. What's the most likely gap?",
+    "choices": [
+      "The Swift delegate must be `@MainActor`, or callbacks are silently dropped",
+      "C++ observers can't notify Swift directly; the UI needs to poll instead",
+      "The bridge object between the C++ observer and Swift delegate isn't wired",
+      "The Swift delegate must be a singleton so the C++ side can find it"
+    ],
+    "answer": 2,
+    "explain": "Wire the complete chain: C++ observer → bridge object → Obj-C/Swift delegate. Missing links are a common source of silent failures."
+  },
+  {
+    "rule": "IOS-049",
+    "prompt": "A C++ class in `ios/browser` stores `ProfileIOS* profile_;`. Reviewer feedback?",
+    "choices": [
+      "Use `std::shared_ptr<ProfileIOS>`",
+      "Use `ProfileIOS& profile_;` instead",
+      "Use `raw_ptr<ProfileIOS> profile_;`",
+      "Fine — raw pointers are allowed on iOS"
+    ],
+    "answer": 2,
+    "explain": "When a C++ class stores a pointer, use `raw_ptr<T>` instead of raw `T*` to enable Chromium's pointer safety checks."
+  },
+  {
+    "rule": "IOS-050",
+    "prompt": "An iOS stub for a cross-platform interface method isn't implemented yet but may be called in practice. Which macro should it use?",
+    "choices": [
+      "`NOTREACHED()` — it documents the path is unsupported",
+      "`CHECK(false)`",
+      "`DCHECK(false)` only",
+      "`NOTIMPLEMENTED()`"
+    ],
+    "answer": 3,
+    "explain": "`NOTREACHED()` crashes in release builds. Use `NOTIMPLEMENTED()` for paths that may be reached but aren't implemented yet; reserve `NOTREACHED()` for truly impossible paths."
+  },
+  {
+    "rule": "IOS-051",
+    "prompt": "Which Mojo interface registration follows the standard?",
+    "choices": [
+      "`registry->Add(\"brave_wallet.mojom.JsonRpcService\", ...)`",
+      "`registry->Add(kJsonRpcServiceName, ...)` with a local `constexpr char[]`",
+      "`registry->Add(brave_wallet::mojom::JsonRpcService::Name_, ...)`",
+      "`registry->Add(typeid(JsonRpcService).name(), ...)`"
+    ],
+    "answer": 2,
+    "explain": "Use the generated interface's `::Name_` constant when registering Mojo interfaces, not hard-coded strings."
+  },
+  {
+    "rule": "IOS-052",
+    "prompt": "A feature saves a user's onboarding-completed state as a file under the app's Caches directory. What's the issue?",
+    "choices": [
+      "None — Caches is backed up to iCloud and persists across launches",
+      "The system can purge Caches at any time, so the state may be lost",
+      "Caches files are readable by other apps in the same app group",
+      "It should use `/tmp` instead, which is cleared less aggressively"
+    ],
+    "answer": 1,
+    "explain": "Don't rely on the iOS caches directory for persistent state — the system can clear it at any time."
+  },
+  {
+    "rule": "IOS-053",
+    "prompt": "A new feature adds user-facing strings to `SharedStrings.swift`. Reviewer feedback?",
+    "choices": [
+      "Fine — `SharedStrings.swift` is where all user-facing strings go",
+      "Hard-code the English strings for now and localize them later",
+      "Put them in the feature's own `Localizable.strings` without a Swift wrapper",
+      "Add them to `BraveStrings`; `SharedStrings` is for legacy strings"
+    ],
+    "answer": 3,
+    "explain": "New user-facing strings go in `BraveStrings`, not `SharedStrings.swift`."
+  },
+  {
+    "rule": "IOS-054",
+    "prompt": "You need a small helper shared by two new feature modules. A teammate suggests adding it to the `Shared` module since both already depend on it. Best response?",
+    "choices": [
+      "Create a new module; `Shared` is legacy and shouldn't grow",
+      "Agree — a common dependency is exactly what `Shared` is for",
+      "Copy the helper into both modules to avoid a new dependency",
+      "Put it in `Shared` but mark it `@available(*, deprecated)`"
+    ],
+    "answer": 0,
+    "explain": "The `Shared` module is legacy — existing code can be used, but don't add new functionality. Create a new module for new shared code."
+  },
+  {
+    "rule": "IOS-055",
+    "prompt": "You add tests for a class in `BraveCore/Wallet/`. Where should the test file live?",
+    "choices": [
+      "`BraveCoreTests/` root, alongside all other tests",
+      "`BraveCore/Wallet/Tests/` next to the source",
+      "`BraveCoreTests/Wallet/`",
+      "`ClientTests/` since it's the main test target"
+    ],
+    "answer": 2,
+    "explain": "Test files should mirror the source module structure: `BraveCore/Wallet/` → `BraveCoreTests/Wallet/`."
+  },
+  {
+    "rule": "IOS-056",
+    "prompt": "A new iOS feature needs to expose its pref names to Swift. A PR adds them to the shared `pref_names_bridge.h`. What should the reviewer suggest?",
+    "choices": [
+      "Hard-code the pref strings in Swift to avoid a bridge header",
+      "Fine — keeping all pref names in one bridge header is simpler",
+      "Move them to `SharedStrings.swift` alongside other shared constants",
+      "Export them in a feature-specific header instead"
+    ],
+    "answer": 3,
+    "explain": "Export iOS pref constants in feature-specific headers, not a shared `pref_names_bridge.h`, to reduce coupling and make dependencies explicit."
+  },
+  {
+    "rule": "IOS-057",
+    "prompt": "A new Obj-C wrapper around a mojom type is used by both browser and renderer-side code. Where should it go?",
+    "choices": [
+      "`ios/browser/`",
+      "`ios/app/`",
+      "`components/` next to the mojom",
+      "`ios/common/`"
+    ],
+    "answer": 3,
+    "explain": "Mojom wrapper types belong in `ios/common/` because they're shared between processes; `ios/browser/` creates unnecessary layering constraints."
+  },
+  {
+    "rule": "IOS-058",
+    "prompt": "You're adding (a) a plain Obj-C header that exposes a C++ type to Swift and (b) an iOS-specific implementation of a cross-platform interface. Which file names fit?",
+    "choices": [
+      "(a) `foo_ios.h`, (b) `foo_bridge.h`",
+      "Both `foo_bridge.h`",
+      "(a) `foo_swift.h`, (b) `foo_impl.h`",
+      "(a) `foo_bridge.h`, (b) `foo_ios.h`"
+    ],
+    "answer": 3,
+    "explain": "Use `_bridge.h` for plain Obj-C wrapper headers exposing C++ to Swift, and `_ios.h` for iOS-specific implementations of cross-platform interfaces."
+  },
+  {
+    "rule": "IOS-059",
+    "prompt": "What should the concrete iOS implementation of `BraveWalletService` be named?",
+    "choices": [
+      "`BraveWalletServiceImpl`",
+      "`BraveWalletServiceIOS`",
+      "`BraveWalletService_ios`",
+      "`IOSBraveWalletService`"
+    ],
+    "answer": 0,
+    "explain": "Name concrete implementations with the `Impl` suffix, not a platform suffix like `_ios`."
+  },
+  {
+    "rule": "IOS-060",
+    "prompt": "A PR is ready except it still contains `print(\"DEBUG tabs:\", tabs)` and a commented-out old implementation. One log line is genuinely useful. What should happen?",
+    "choices": [
+      "Remove the prints and dead code; use `Logger` for the useful line",
+      "Leave them — they help future debugging and cost nothing at runtime",
+      "Wrap the prints in `#if DEBUG` so they never ship in release builds",
+      "Convert all of them to `NSLog` so they show up in device logs"
+    ],
+    "answer": 0,
+    "explain": "Remove debug `print` statements and dead code before submitting; use `Logger` instead of `print` for logging that should stay."
+  },
+  {
+    "rule": "IOS-061",
+    "prompt": "A UI refactor replaces a `UIButton` (which had `accessibilityLabel = Strings.close`) with a new SwiftUI button. What should the reviewer verify?",
+    "choices": [
+      "Nothing — SwiftUI generates labels from the icon name automatically",
+      "That accessibility labels are removed since SwiftUI handles it",
+      "That the new button keeps an accessibility label for VoiceOver",
+      "That the button has a tooltip"
+    ],
+    "answer": 2,
+    "explain": "Always set accessibility labels on interactive elements, and verify they're preserved when refactoring UI — VoiceOver users depend on them."
+  },
+  {
+    "rule": "IOS-063",
+    "prompt": "You need small thumbnails of large tab screenshots. Which approach does the standard prefer?",
+    "choices": [
+      "Draw into a `UIGraphicsImageRenderer` at the target size",
+      "Use `UIImage.prepareThumbnail(of:)`",
+      "Set `UIImageView.contentMode` and let it scale",
+      "Use Core Image's `CILanczosScaleTransform`"
+    ],
+    "answer": 1,
+    "explain": "Use `UIImage.prepareThumbnail(of:)` instead of manual `UIGraphicsImageRenderer` resizing — it's optimized for memory and performance."
+  },
+  {
+    "rule": "IOS-064",
+    "prompt": "An injected web page (e.g. an internal error page) needs a dark mode. The PR toggles a `.dark` class via JavaScript when the app theme changes. Best suggestion?",
+    "choices": [
+      "Fine — JS toggling is more flexible",
+      "Inject inline styles from Swift on each theme change",
+      "Render two copies of the page and swap them",
+      "Use CSS `@media (prefers-color-scheme: dark)`"
+    ],
+    "answer": 3,
+    "explain": "For injected web content, prefer CSS `@media (prefers-color-scheme: dark)` over toggling CSS classes via JavaScript."
+  },
+  {
+    "rule": "IOS-065",
+    "prompt": "You want to call `.scrollBounceBehavior(_:)` (iOS 17+) on a codebase that still supports iOS 16, with a no-op fallback that disappears automatically once the deployment target is raised. How?",
+    "choices": [
+      "Wrap each call site in `if #available(iOS 17, *)` with an empty else branch",
+      "A same-named `View` extension, `@_disfavoredOverload` and obsoleted in 17",
+      "Add a differently named `braveScrollBounceBehavior` extension that forwards",
+      "Mark a same-named fallback `@available(iOS, deprecated: 17.0)` as a reminder"
+    ],
+    "answer": 1,
+    "explain": "Backport with `@_disfavoredOverload` + `@available(iOS, obsoleted:)` to create a transparent fallback that vanishes automatically when the deployment target is raised."
+  },
+  {
+    "rule": "IOS-066",
+    "prompt": "```swift\ntry await Task.sleep(nanoseconds: 500_000_000)\n```\n\nThis appears with no context in a PR. What should the reviewer ask for?",
+    "choices": [
+      "Replace it with `DispatchQueue.main.asyncAfter`",
+      "Increase it to 1 second to be safe",
+      "Nothing — short delays are harmless",
+      "A comment explaining why the delay is necessary"
+    ],
+    "answer": 3,
+    "explain": "Artificial delays like `Task.sleep` must have a comment explaining why they're needed; unexplained delays are a code smell that may hide race conditions."
+  },
+  {
+    "rule": "IOS-067",
+    "prompt": "A media player shows elapsed time using `String(format: \"%02d:%02d\", minutes, seconds)`. Reviewer suggestion?",
+    "choices": [
+      "Use a `DateFormatter` with the `\"mm:ss\"` format",
+      "Use `Duration.formatted()` / `TimestampFormatStyle`",
+      "Fine — `String(format:)` is the simplest approach",
+      "Use string interpolation with zero-padding helpers"
+    ],
+    "answer": 1,
+    "explain": "Use `TimestampFormatStyle` or `Duration.formatted()` for durations instead of manual string formatting."
+  },
+  {
+    "rule": "IOS-068",
+    "prompt": "A class adds `private var waitForReadyCancellable: AnyCancellable?` just to wait for a single value once during setup. Reviewer feedback?",
+    "choices": [
+      "Fine — cancellables must always be stored as properties",
+      "Store it in a `Set<AnyCancellable>` instead",
+      "Use `.sink` without keeping a cancellable at all",
+      "Use a local variable for the short-lived cancellable"
+    ],
+    "answer": 3,
+    "explain": "For temporary Combine subscriptions (e.g. waiting for one value), prefer a local variable over a stored property to avoid accumulating dead subscriptions."
+  },
+  {
+    "rule": "IOS-069",
+    "prompt": "```swift\nfunc requestPermission() async -> Bool {\n  await withCheckedContinuation { continuation in\n    pendingContinuation = continuation\n    delegate?.showPermissionPrompt()\n  }\n}\n```\n\nWhat's the risk, and the fix?",
+    "choices": [
+      "If `delegate` is nil it never resumes — check the delegate first",
+      "The continuation may be resumed twice by the prompt; add a lock around it",
+      "It must use `withCheckedThrowingContinuation` so a denial can throw",
+      "It's missing `[weak self]`; add it to the closure to avoid a retain cycle"
+    ],
+    "answer": 0,
+    "explain": "When a continuation depends on a delegate callback, check the delegate is set before entering `withCheckedContinuation`, or the task can hang forever."
+  },
+  {
+    "rule": "IOS-070",
+    "prompt": "A new primary button is styled as a full capsule, though the design doesn't call for it. What shape does the standard expect?",
+    "choices": [
+      "Capsule — it's the iOS default for primary buttons",
+      "Rounded rectangle, consistent with Nala",
+      "Sharp corners for a cleaner, more modern look",
+      "Circle, so every button shares one shape"
+    ],
+    "answer": 1,
+    "explain": "Buttons should use rounded rectangle shapes consistent with Nala; avoid capsule or sharp-cornered buttons unless the design calls for it."
+  },
+  {
+    "rule": "IOS-071",
+    "prompt": "To customize `ChromeViewController` via chromium_src on iOS, which approach is preferred?",
+    "choices": [
+      "`#define ChromeViewController BraveViewController` around an `#include`, then `#undef`",
+      "Copy the upstream `.mm` into chromium_src and edit the copy so upstream stays untouched",
+      "Patch the upstream file directly with a small, clearly commented `.patch` file",
+      "Swizzle methods at runtime with `method_exchangeImplementations` in a Brave category"
+    ],
+    "answer": 0,
+    "explain": "Prefer subclassing over duplication using the `#define`/`#include`/`#undef` pattern to substitute a Brave subclass, with blank lines around the wrapped include."
+  },
+  {
+    "rule": "IOS-074",
+    "prompt": "A feature should default to enabled on iOS but disabled elsewhere. A PR adds `#if BUILDFLAG(IS_IOS)` in the feature definition `.cc`. Preferred approach?",
+    "choices": [
+      "Keep the `#if` — it's the clearest way to express a platform default",
+      "Toggle it at runtime from Swift on launch via the feature list",
+      "Use a Griffin study only, so the default stays the same everywhere",
+      "Use a GN build argument to set the platform-specific default"
+    ],
+    "answer": 3,
+    "explain": "Use GN build args (not C++ source) for platform-specific feature defaults — it allows build-time configuration and reduces `#ifdef` clutter."
+  },
+  {
+    "rule": "IOS-075",
+    "prompt": "A PR adds a new iOS unit test target `brave_ios_rewards_unittests` but doesn't touch any aggregate target. What's the consequence?",
+    "choices": [
+      "None — CI discovers all `*_unittests` targets automatically",
+      "The tests only run in release builds, not on debug bots",
+      "The tests run but their results aren't reported to the PR",
+      "They never run on CI; add it to `brave_all_unit_tests`"
+    ],
+    "answer": 3,
+    "explain": "Every new iOS test target must be included in `brave_all_unit_tests`; otherwise it never runs on CI."
+  },
+  {
+    "rule": "IOS-076",
+    "prompt": "In an iOS bridge header, a flag is exposed as `kBraveNewsFeedV2` but the C++ `base::Feature` is named `kBraveNewsFeedUpdate`. Why does this matter?",
+    "choices": [
+      "It doesn't — the bridge name is cosmetic as long as it compiles",
+      "It breaks the build, since the bridge macro expects matching names",
+      "Mismatched names fail silently: the flag appears to work but doesn't",
+      "Only the Swift name matters, because Griffin reads it from the bridge"
+    ],
+    "answer": 2,
+    "explain": "Feature flag names in iOS bridge headers must exactly match the C++ `base::Feature` names, or the flag silently fails to control the feature."
+  },
+  {
+    "rule": "IOS-077",
+    "prompt": "A new `UIImageView` shows a downloaded favicon with no `contentMode` or size constraints, and some icons blow out the layout. What's the fix?",
+    "choices": [
+      "Resize every downloaded favicon to 24×24 before display",
+      "Call `sizeToFit()` on the image view after setting the image",
+      "Set an explicit `contentMode` or size constraints",
+      "Use `withRenderingMode(.alwaysTemplate)` on the image"
+    ],
+    "answer": 2,
+    "explain": "Set explicit `contentMode` or size constraints on `UIImageView`/SwiftUI `Image` (e.g. `.resizable().frame(maxWidth:maxHeight:)`); otherwise images display at natural size."
+  },
+  {
+    "rule": "IOS-078",
+    "prompt": "Which icon-only SwiftUI delete button follows the standard?",
+    "choices": [
+      "`Button { … } label: { Image(braveSystemName: \"leo.trash\") }`",
+      "`Button { … } label: { Image(braveSystemName: \"leo.trash\").accessibilityHidden(true) }`",
+      "`Button(\"\") { … }.overlay(Image(braveSystemName: \"leo.trash\")).accessibilityLabel(\"Delete\")`",
+      "`Button { … } label: { Label(\"Delete\", braveSystemImage: \"leo.trash\") }.labelStyle(.iconOnly)`"
+    ],
+    "answer": 3,
+    "explain": "Use `Label` with `.labelStyle(.iconOnly)` for icon-only buttons so accessibility information is provided automatically."
+  },
+  {
+    "rule": "IOS-079",
+    "prompt": "A new toolbar needs a trash icon. Which is correct?",
+    "choices": [
+      "`Image(systemName: \"trash\")`",
+      "`Image(\"trash\")` from a bundled PNG",
+      "`Image(uiImage: UIImage(systemName: \"trash\")!)`",
+      "`Image(braveSystemName: \"leo.trash\")`"
+    ],
+    "answer": 3,
+    "explain": "Use Nala (Leo) icons via `Image(braveSystemName:)` instead of Apple's `Image(systemName:)` for design-system consistency."
+  },
+  {
+    "rule": "IOS-080",
+    "prompt": "```swift\nImage(braveSystemName: \"leo.trash\")\n  .resizable()\n  .frame(width: 24, height: 24)\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Add `.aspectRatio(contentMode: .fit)` so the glyph isn't distorted",
+      "Use `.scaleEffect(1.5)` instead of `.frame` to keep it crisp",
+      "Nothing — `.resizable().frame(...)` is the right way to size images",
+      "Size it with a font, e.g. `.font(.title3)`, like an SF Symbol"
+    ],
+    "answer": 3,
+    "explain": "Nala icons are custom SF Symbols; treat them like font glyphs and size them with `.font()`, not `.resizable().frame()`."
+  },
+  {
+    "rule": "IOS-081",
+    "prompt": "A design calls for a 15pt caption. Which implementation is acceptable?",
+    "choices": [
+      "A semantic style like `.subheadline`, or a `@ScaledMetric` size",
+      "`.font(.system(size: 15))`, matching the design spec exactly",
+      "`.font(.custom(\"SF Pro\", fixedSize: 15))` for a stable layout",
+      "`UIFont.systemFont(ofSize: 15)` in UIKit, bridged into the view"
+    ],
+    "answer": 0,
+    "explain": "Don't use explicit font sizes — respect Dynamic Type with semantic styles. If a custom value is needed, use `@ScaledMetric` (SwiftUI) or `UIFontMetrics` (UIKit)."
+  },
+  {
+    "rule": "IOS-082",
+    "prompt": "```swift\nstruct ContentView: View {\n  @State private var value: Int\n  init(value: Int) {\n    self._value = State(wrappedValue: value)\n  }\n  ...\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — `State(wrappedValue:)` is the documented way to seed `@State`",
+      "Don't seed `@State` in `init`; assign it in `.onAppear` or `.task`",
+      "Change `@State` to `@Binding` so the parent owns the initial value",
+      "Make `value` a `static var` so it's shared and survives view updates"
+    ],
+    "answer": 1,
+    "explain": "Assigning `@State` in `init` via `State(wrappedValue:)` can cause undefined behavior on later body computations. Pass the initial value and assign it in `onAppear` or `task`."
+  },
+  {
+    "rule": "IOS-083",
+    "prompt": "```swift\nToggle(\"Setting\", isOn: Binding(\n  get: { isEnabled },\n  set: { isEnabled = $0; performSomeWork() }\n))\n```\n\nBest review suggestion?",
+    "choices": [
+      "Fine — a custom `Binding` is the idiomatic way to add side effects",
+      "Use `$isEnabled` and do the work in `.onChange(of: isEnabled)`",
+      "Wrap `performSomeWork()` in `DispatchQueue.main.async` inside `set`",
+      "Use `Binding.constant(isEnabled)` and call the work from the toggle"
+    ],
+    "answer": 1,
+    "explain": "Avoid `Binding(get:set:)` for side effects or transforms — SwiftUI can't tell if the graph changed, causing unnecessary rebuilds. Use `onChange`/`didSet` for side effects, and helpers or subscripts on the type for transforms (e.g. `$value.isPresented`)."
+  }
+]

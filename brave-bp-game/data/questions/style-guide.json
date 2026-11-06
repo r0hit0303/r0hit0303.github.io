@@ -1,0 +1,302 @@
+[
+  {
+    "rule": "SG-001",
+    "prompt": "After the user clears data, which confirmation string follows the Brave voice guidelines?",
+    "choices": [
+      "\"Brave cleared your browsing history.\"",
+      "\"Your browsing history has been cleared by the system.\"",
+      "\"Browsing history clearing has been completed successfully.\"",
+      "\"Poof! Your history is gone for good!\""
+    ],
+    "answer": 0,
+    "explain": "Use active voice (say who did it), stay concise and simple, and be friendly but not jokey or whimsical."
+  },
+  {
+    "rule": "SG-002",
+    "prompt": "Which warning text follows the Brave style guide?",
+    "choices": [
+      "\"You cannot undo this action.\"",
+      "\"You can't undo this action.\"",
+      "\"This action cannot be undone.\"",
+      "\"This action is not able to be undone.\""
+    ],
+    "answer": 1,
+    "explain": "Use contractions where possible; they're more conversational and save space in UI strings."
+  },
+  {
+    "rule": "SG-003",
+    "prompt": "An ad-reporting dialog needs a label for a flagged ad. Which is best?",
+    "choices": [
+      "\"This ad looks creepy\"",
+      "\"This ad is basically sketchy\"",
+      "\"This ad looks suspicious\"",
+      "\"This ad seems fishy\""
+    ],
+    "answer": 2,
+    "explain": "Avoid colloquial language, idioms, slang, and filler words like \"basically\"; they can confuse, offend, or translate poorly."
+  },
+  {
+    "rule": "SG-004",
+    "prompt": "A consent checkbox appears before account creation. Which label follows the perspective rules?",
+    "choices": [
+      "\"You've read the Brave terms of service\"",
+      "\"The user has read the Brave terms of service\"",
+      "\"We confirm you've read our terms of service\"",
+      "\"I've read the Brave terms of service\""
+    ],
+    "answer": 3,
+    "explain": "Address readers in second person (you, your), but use first person (I, me, my) when the user takes an action or gives consent."
+  },
+  {
+    "rule": "SG-004",
+    "prompt": "A privacy notice explains what search data is accessible. Which phrasing does the style guide prefer?",
+    "choices": [
+      "\"Brave can only access the following search data…\"",
+      "\"We can only access the following search data…\"",
+      "\"Our team can only access the following search data…\"",
+      "\"The following search data can only be accessed…\""
+    ],
+    "answer": 0,
+    "explain": "For legal, security, or data privacy topics, say \"Brave\" or \"the Brave team\" instead of \"we\" to avoid implying staff can access user data."
+  },
+  {
+    "rule": "SG-005",
+    "prompt": "You're writing a Shields-down confirmation dialog. Which version best follows the sentence-length guideline?",
+    "choices": [
+      "\"Are you sure you want to put Shields down for this page? Shields down may reduce your privacy.\"",
+      "Title: \"Put Shields down?\" Body: \"Shields down may reduce your privacy on this site.\"",
+      "\"Putting Shields down for this page, which you may want to do, may reduce your privacy and expose trackers.\"",
+      "Title: \"Are you sure you want to put Shields down for this page right now?\""
+    ],
+    "answer": 1,
+    "explain": "Aim for 15 words or fewer per sentence. Break long sentences up (e.g. a short title plus body) and read them aloud to test."
+  },
+  {
+    "rule": "SG-006",
+    "prompt": "Which help text uses the preferred tense?",
+    "choices": [
+      "\"Clicking 'Search default' will show a list of search options\"",
+      "\"Once you click 'Search default,' you'll see a list of search options\"",
+      "\"Click 'Search default' to see a list of search options\"",
+      "\"You are clicking 'Search default' to be seeing search options\""
+    ],
+    "answer": 2,
+    "explain": "Default to simple present tense. If a verb follows was/were, has/have, is/are, or be, or ends in -ing, it isn't simple tense."
+  },
+  {
+    "rule": "SG-007",
+    "prompt": "Which sentence follows the style guide's language guidance?",
+    "choices": [
+      "\"Ask the account owner to approve his request.\"",
+      "\"Ask the account owner to approve his or her request.\"",
+      "\"Ask the chairman of the account to approve the request.\"",
+      "\"Ask the account owner to approve the request.\""
+    ],
+    "answer": 3,
+    "explain": "Rephrase to avoid gendered pronouns (defaulting to they/their if unavoidable) and avoid gender-latent words like \"chairman\" or \"policeman.\""
+  },
+  {
+    "rule": "SG-008",
+    "prompt": "Which desktop settings section heading is correctly cased?",
+    "choices": [
+      "\"Clear browsing data\"",
+      "\"Clear All Browsing Data\"",
+      "\"CLEAR BROWSING DATA\"",
+      "\"clear browsing data\""
+    ],
+    "answer": 0,
+    "explain": "Use sentence case for headlines, titles, and buttons; never ALL CAPS. Title case is only for branded product names (iOS is an exception, following Apple's rules)."
+  },
+  {
+    "rule": "SG-009",
+    "prompt": "Which marketing line follows the style guide?",
+    "choices": [
+      "\"Keep your friends, Brendan and Brian, safe with Brave\"",
+      "\"Keep your friends, Brendan, and Brian safe with Brave\"",
+      "\"Keep your friends, Brendan & Brian safe with Brave\"",
+      "\"Keep your friends; Brendan; and Brian, safe with Brave\""
+    ],
+    "answer": 1,
+    "explain": "Always use the Oxford (serial) comma before the last item in a list of 3 or more."
+  },
+  {
+    "rule": "SG-010",
+    "prompt": "Which string follows Brave's punctuation rules?",
+    "choices": [
+      "\"Loading...\" using three standard periods",
+      "\"Loading!!\" with doubled exclamation for emphasis",
+      "\"Loading…\" with the Unicode ellipsis character",
+      "\"Loading . . .\" with periods spaced per print style"
+    ],
+    "answer": 2,
+    "explain": "Use the Unicode ellipsis `…`, not three periods. Exclamation points are used sparingly, never more than one per view."
+  },
+  {
+    "rule": "SG-010",
+    "prompt": "Which sentence uses hyphens and dashes correctly per the style guide?",
+    "choices": [
+      "\"Keep a browser that's up-to-date. Support is available Monday - Friday.\"",
+      "\"Keep an up to date browser. Support is available Monday to-Friday.\"",
+      "\"Keep an up-to-date browser — support is available Monday-Friday.\"",
+      "\"Keep an up-to-date browser. Support is available Monday–Friday.\""
+    ],
+    "answer": 3,
+    "explain": "Hyphenate multi-word adjectives before a noun (\"up-to-date browser\"), not after. Use an en dash for spans replacing \"to,\" and em dashes have no surrounding spaces."
+  },
+  {
+    "rule": "SG-011",
+    "prompt": "Which confirmation modal follows the UI copy guidelines?",
+    "choices": [
+      "Title \"Delete history?\", a body stating the consequence, button [Delete history]",
+      "Title \"Would you like to delete your history now?\" with buttons [OK] and [Cancel]",
+      "Title \"Delete history?\" with button [YES, DELETE THE HISTORY]",
+      "Title \"Please confirm\", body \"Are you sure you want to continue?\", button [Continue]"
+    ],
+    "answer": 0,
+    "explain": "Confirmation modals: the title states the action as a question, the body states consequences, and the button repeats the action verb (≤3 words, sentence case, no articles)."
+  },
+  {
+    "rule": "SG-011",
+    "prompt": "A page failed to load. Which error message meets the guidelines?",
+    "choices": [
+      "\"Whoopsie! Something went wrong. We're on it, hang tight!\"",
+      "\"This page failed to load. Try reloading, or setting Shields down.\"",
+      "\"Sorry, the server failed to fetch the page. Please try again later.\"",
+      "\"Invalid response from server (error code 502). Reload to retry.\""
+    ],
+    "answer": 1,
+    "explain": "Error messages must say what happened and offer a solution; never a dead end. Avoid exclamations, apologies, \"please,\" blame, and jargon like server, fetch, or invalid."
+  },
+  {
+    "rule": "SG-012",
+    "prompt": "Which email footer text follows the accessibility guidance?",
+    "choices": [
+      "\"To unsubscribe from these emails, click here.\" (with \"here\" as the link)",
+      "\"Click the link below to unsubscribe from future emails.\"",
+      "\"Want to stop getting these emails? Unsubscribe.\" (link on \"Unsubscribe\")",
+      "\"Unsubscribe using the button to the right of this message.\""
+    ],
+    "answer": 2,
+    "explain": "Never use \"click here\" as link text; describe what happens. Also avoid directional language like \"to the right of\" or \"below.\""
+  },
+  {
+    "rule": "SG-013",
+    "prompt": "Which UI string formats numbers and dates correctly?",
+    "choices": [
+      "\"Sync three devices by June 1st at 6:00 PM\"",
+      "\"Sync 3 devices by 6/1/21 at 6:00pm\"",
+      "\"Sync 3 devices by June 1st at 18:00\"",
+      "\"Sync 3 devices by June 1 at 6:00 pm\""
+    ],
+    "answer": 3,
+    "explain": "In UI, use digits for 0–9. Dates have no ordinals or numeric formats, and times are lowercase with a space: \"6:00 pm.\""
+  },
+  {
+    "rule": "SG-013",
+    "prompt": "Which storage and pricing string is formatted correctly?",
+    "choices": [
+      "\"Get 1 TB for HK$9.99, 50% off\"",
+      "\"Get 1TB for $9.99 HKD, 50 % off\"",
+      "\"Get one TB for HK$9.99, 50 percent off\"",
+      "\"Get 1 TB for 9.99 HK$, 50% off\""
+    ],
+    "answer": 0,
+    "explain": "Put a space between a number and its unit (\"1 TB\"), no space before % (\"50%\"), and use the currency symbol with the country outside the US (\"HK$9.99\")."
+  },
+  {
+    "rule": "SG-014",
+    "prompt": "Which sentence follows Brave's product naming conventions?",
+    "choices": [
+      "\"Download the Brave Browser and turn on shields.\"",
+      "\"Download the Brave browser and turn on Shields.\"",
+      "\"Download Brave and turn on shields.\"",
+      "\"Be Brave: download the Brave Browser today and turn on Shields.\""
+    ],
+    "answer": 1,
+    "explain": "\"Brave browser\" always has a lowercase \"browser,\" and Shields is always capitalized, even in general usage. Never use \"Brave\" as an adjective."
+  },
+  {
+    "rule": "SG-015",
+    "prompt": "Which settings toggle label follows the style guide's word choices?",
+    "choices": [
+      "\"Activate Brave Private Ads\"",
+      "\"Enable Brave Private Ads\"",
+      "\"Turn on Brave Private Ads\"",
+      "\"Turn on Brave ads\""
+    ],
+    "answer": 2,
+    "explain": "Say \"turn on\"/\"turn off,\" not \"enable\"/\"disable,\" and use the branded names \"Brave Ads\" or \"Brave Private Ads.\""
+  },
+  {
+    "rule": "SG-015",
+    "prompt": "Which Brave Rewards and Playlist copy uses the approved vocabulary?",
+    "choices": [
+      "\"Tip BAT to creators. Download videos to your playlist.\"",
+      "\"Donate BAT to creators. Save videos to your playlist.\"",
+      "\"Send BAT to creators. Watch saved videos in your playlist.\"",
+      "\"Contribute BAT to creators. Add videos to your playlist.\""
+    ],
+    "answer": 3,
+    "explain": "Use \"contribute\"/\"support\" for BAT (not donate, tip, give, pay, or send), \"add\" for Playlist (not download/save), and \"view\" instead of \"watch.\""
+  },
+  {
+    "rule": "SG-016",
+    "prompt": "Which privacy claim follows Brave's terminology rules?",
+    "choices": [
+      "\"Brave routes your request through a proxy, so the site can't see your IP address.\"",
+      "\"Your browsing is 100% anonymous thanks to our anonymizing server network.\"",
+      "\"Military-grade encryption keeps your browsing completely private from everyone.\"",
+      "\"Brave's TOR windows make you totally secure and invisible to every site you visit.\""
+    ],
+    "answer": 0,
+    "explain": "Privacy claims must say specifically what's protected and how. Never use superlatives like \"100% anonymous\" or \"military-grade,\" prefer \"proxy server\" over \"anonymizing server,\" and never write \"TOR.\""
+  },
+  {
+    "rule": "SG-017",
+    "prompt": "Which string is best for localization?",
+    "choices": [
+      "\"Be sure to clear this page's contents\"",
+      "\"Clear the content of this page\"",
+      "An \"Aa\" icon with no text label",
+      "A button image with the text \"Clear\" baked into the PNG"
+    ],
+    "answer": 1,
+    "explain": "Write for translation: lead with the verb (not \"Be sure to…\"), avoid possessives, avoid letters in icons, label icons with text, and keep text out of images."
+  },
+  {
+    "rule": "SG-018",
+    "prompt": "Which Rewards balance string follows the BAT guidelines?",
+    "choices": [
+      "\"$80 BAT\"",
+      "\"80 BAT points\"",
+      "\"80.000 BAT\"",
+      "\"80.00 BAT (cryptocurrency)\""
+    ],
+    "answer": 2,
+    "explain": "Show BAT balances to three decimal places, never with a currency symbol. BAT is a \"token\" or \"crypto asset,\" never a point, currency, or cryptocurrency."
+  },
+  {
+    "rule": "SG-019",
+    "prompt": "Which onboarding sentence describes devices correctly on first reference?",
+    "choices": [
+      "\"Sync bookmarks between your PC and your mobile device.\"",
+      "\"Sync bookmarks between your laptop computer and your smartphone.\"",
+      "\"Sync bookmarks between your desktop and your device.\"",
+      "\"Sync bookmarks between your computer and your phone or tablet.\""
+    ],
+    "answer": 3,
+    "explain": "Use \"phone or tablet\" on first mobile reference (then \"your device\"), and \"computer\" for non-mobile machines; avoid laptop, PC, or desktop."
+  },
+  {
+    "rule": "SG-020",
+    "prompt": "Which marketing line follows Brave's product messaging rules?",
+    "choices": [
+      "\"Brave Talk: free video calls for up to 4 people, with no time limit.\"",
+      "\"Brave Talk: end-to-end encrypted video calls for everyone, totally free.\"",
+      "\"Brave VPN: watch your favorite streaming sites from anywhere.\"",
+      "\"The Brave browser blocks all ads and trackers, unlike Meta.\""
+    ],
+    "answer": 0,
+    "explain": "Talk can claim free calls for up to 4 people with no time limit, but never \"E2E\"/\"end-to-end.\" Don't pitch VPN for streaming, claim Brave blocks ALL ads/trackers, or call out companies like Meta."
+  }
+]

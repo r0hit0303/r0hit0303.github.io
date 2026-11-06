@@ -1,0 +1,206 @@
+[
+  {
+    "rule": "ARCH-059",
+    "prompt": "A new `FooService` is only ever obtained through:\n\n```cpp\nFooService* FooServiceFactory::GetForProfile(Profile* profile) {\n  return static_cast<FooService*>(\n      GetInstance()->GetServiceForBrowserContext(profile, /*create=*/true));\n}\n```\n\nA bug reproduces in production but never in browser tests, which don't call `GetForProfile`. What should the reviewer suggest?",
+    "choices": [
+      "Call `GetForProfile()` in each test's `SetUpOnMainThread()` to force creation",
+      "Pass `/*create=*/false` so the service is never created implicitly",
+      "Override `ServiceIsCreatedWithBrowserContext()` to return `true`",
+      "Create the service lazily from a static `NoDestructor` instead of the factory"
+    ],
+    "answer": 2,
+    "explain": "Features should be created eagerly with explicit lifetimes, not lazily on first use. Lazy creation gives tests and production different initialization orders, which makes bugs hard to reproduce."
+  },
+  {
+    "rule": "ARCH-060",
+    "prompt": "You're reviewing:\n\n```cpp\nvoid FetchData(Callback cb) {\n  if (cache_.contains(key)) {\n    std::move(cb).Run(cache_[key]);\n    return;\n  }\n  network_->Fetch(key, std::move(cb));\n}\n```\n\nWhat is the problem, and the fix?",
+    "choices": [
+      "It's fine: running synchronously on a cache hit avoids a needless task hop",
+      "The cache hit should post the callback so it's always async",
+      "The network path should block until the fetch completes, so it's always sync",
+      "Callers should be documented to check the cache first and handle the sync case"
+    ],
+    "answer": 1,
+    "explain": "A given callback must run either always synchronously or always asynchronously. Mixing the two means callers can't reason about when it runs; post the cached result with `PostTask` instead."
+  },
+  {
+    "rule": "ARCH-061",
+    "prompt": "A reviewer flags this helper:\n\n```cpp\nvoid ProcessItem(int id) {\n  auto item = global_registry_->GetItem(id);\n  auto config = settings_manager_->GetConfig();\n  DoWork(item, config);\n}\n```\n\nWhat change best matches the guidance on control flow?",
+    "choices": [
+      "Cache `item` and `config` in members on first use to avoid repeated lookups",
+      "Wrap the body in a `base::AutoReset` guard so re-entrant calls are ignored",
+      "Look the values up once at startup and store them in a global struct",
+      "Take `const Item&` and `const Config&` as parameters"
+    ],
+    "answer": 3,
+    "explain": "Keep control flow localized: pass the state a function needs as parameters instead of querying non-local state mid-execution. `AutoReset` guards are a last resort for unavoidable re-entrancy, not a substitute."
+  },
+  {
+    "rule": "ARCH-062",
+    "prompt": "Which of these PRs should a reviewer ask to include an `InteractiveBrowserTest` Critical User Journey test?",
+    "choices": [
+      "A new toolbar button that opens a native Views bubble",
+      "A new toggle on `brave://settings` wired directly to a pref",
+      "A new tab helper that records page-load timings in the background",
+      "A new `KeyedService` that syncs data with a backend server"
+    ],
+    "answer": 0,
+    "explain": "Features that add or modify user-visible native (Views) UI need at least one CUJ test. Don't require one for WebUI pages, trivial pref-wired toggles, or non-UI code like services and tab helpers."
+  },
+  {
+    "rule": "ARCH-062",
+    "prompt": "A PR adds a new dialog and tests it like this:\n\n```cpp\nclass MyDialogTest : public BrowserWithTestWindowTest {};\n```\n\nThe production code now contains `if (!browser_view) return;` to make the test pass. What should the reviewer say?",
+    "choices": [
+      "Fine, as long as the null check carries a comment saying it's for tests",
+      "Switch to `TestWithBrowserView` so `browser_view` is never null in the test",
+      "Keep the test, but move the null check into a test-only `#if` block",
+      "Use an `InteractiveBrowserTest` CUJ test instead"
+    ],
+    "answer": 3,
+    "explain": "`BrowserWithTestWindowTest` forces test-only `if (!browser_view)` checks into production code. UI features should be covered by an `InteractiveBrowserTest` CUJ test, or by tests with proper dependency injection."
+  },
+  {
+    "rule": "ARCH-063",
+    "prompt": "A utility file adds:\n\n```cpp\n// static\nbool FooUtils::IsFeatureReady() {\n  auto* profile = ProfileManager::GetLastUsedProfile();\n  return FooServiceFactory::GetForProfile(profile)->IsReady();\n}\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Use `GetActiveUserProfile()` so the result follows the focused window",
+      "Take the `FooService*` as a parameter from the caller",
+      "Null-check the profile and return `false` when none has been loaded yet",
+      "Turn it into a member of a singleton so the profile lookup is cached"
+    ],
+    "answer": 1,
+    "explain": "Free functions and static methods must not reach into non-global state like profiles or windows. Have the caller pass in the profile- or window-specific dependency."
+  },
+  {
+    "rule": "ARCH-064",
+    "prompt": "A new tab-scoped `ReaderModeFeature` must be queried by the toolbar button code to decide whether to show itself for a given tab. How should the feature be owned and exposed?",
+    "choices": [
+      "As a plain `unique_ptr` in `BraveTabFeatures`, with a getter on the tab",
+      "As a `WebContentsUserData` helper fetched via `FromWebContents()`",
+      "Via Unowned User Data, with a static `From(tab)` accessor",
+      "As a global `std::map<TabInterface*, Feature*>` owned by the button"
+    ],
+    "answer": 2,
+    "explain": "Self-contained tab/window features can be a plain `unique_ptr` member. When external code needs to retrieve the feature, use the Unowned User Data pattern with a static `From()`, separating lifetime from retrieval."
+  },
+  {
+    "rule": "ARCH-065",
+    "prompt": "You need a browser test where every tab gets a `MyTabFeatureMock` instead of the real Unowned User Data feature. What's the recommended approach?",
+    "choices": [
+      "Add a factory override for testing before the browser is created",
+      "Use `BrowserWithTestWindowTest` and attach the mock to its fake tab strip",
+      "After startup, delete each tab's real feature and construct the mock in its place",
+      "Add a `--use-mock-tab-feature` switch checked inside `BraveTabFeatures::Init()`"
+    ],
+    "answer": 0,
+    "explain": "For integration tests, install a factory override via `GetUserDataFactoryForTesting().AddOverrideForTesting()` before the browser starts. For unit tests, attach the feature directly to a mock interface's `UnownedUserDataHost`."
+  },
+  {
+    "rule": "ARCH-067",
+    "prompt": "You're reviewing:\n\n```cpp\nvoid FetchAll(const std::vector<Item>& items, DoneCallback done) {\n  auto barrier = base::BarrierCallback<Result>(\n      items.size(), std::move(done));\n  for (const auto& item : items) {\n    FetchAsync(item, barrier);\n  }\n}\n```\n\nWhat bug should you point out?",
+    "choices": [
+      "`barrier` is copied into each fetch, so `done` runs once per item",
+      "With empty `items`, `done` never runs; handle that case first",
+      "`done` must be bound with `base::Unretained` before being passed in",
+      "`BarrierCallback` requires a fixed compile-time count, not a `size()`"
+    ],
+    "answer": 1,
+    "explain": "A `BarrierCallback` created with a count of zero never fires its done callback. Check for the empty case and run the callback (e.g. with `{}`) and return early."
+  },
+  {
+    "rule": "ARCH-068",
+    "prompt": "Your PR adds two new P3A histograms reporting how often users open a new panel. Code review is approved and CI is green. What else must happen before merging?",
+    "choices": [
+      "Nothing; P3A is already privacy-preserving, so new metrics need no extra review",
+      "Add the histograms to `histograms.xml` and get an OWNERS approval there",
+      "Ship them behind a feature flag off by default until data has been reviewed",
+      "Describe the metrics in the p3a Slack channel for privacy review"
+    ],
+    "answer": 3,
+    "explain": "New P3A metrics have strict privacy requirements. Post a brief description in the p3a Slack channel so the analytics team can do a privacy review before you merge."
+  },
+  {
+    "rule": "ARCH-069",
+    "prompt": "During review you notice a new persisted pref:\n\n```cpp\ninline constexpr char kShowSidbarButton[] =\n    \"brave.sidbar.show_button\";\n```\n\nThe feature is landing behind a flag. What's the right call?",
+    "choices": [
+      "Leave it; the key can be renamed once the feature is enabled by default",
+      "Fix only the C++ constant name; the stored string never matters to users",
+      "Fix the key string now, before the first release ships it",
+      "Leave it and file a follow-up to add a migration in a later release"
+    ],
+    "answer": 2,
+    "explain": "Persisted pref keys must be spelled correctly before the first release that includes them. Changing a key after it ships requires a migration to avoid losing user data."
+  },
+  {
+    "rule": "ARCH-070",
+    "prompt": "While implementing a new Wallet setting, you notice an unrelated crash in the Rewards panel and also want to reorder methods in a file you aren't otherwise touching. What should you do?",
+    "choices": [
+      "Fix both in this PR so reviewers only need to load the context once",
+      "Fix the crash here since it's urgent; defer only the reordering",
+      "Include both, but mention each one clearly in the PR description",
+      "Put the crash fix in its own PR and skip the reordering"
+    ],
+    "answer": 3,
+    "explain": "Each PR should have a single main purpose. Unrelated bug fixes and aesthetic reordering are ride-along changes; they make review, reverts, and bisecting harder."
+  },
+  {
+    "rule": "ARCH-071",
+    "prompt": "A PR adds this to `components/playlist/core/common/DEPS`:\n\n```\ninclude_rules = [\n  \"+components/prefs\",\n]\n```\n\nso that `common/utils.h` can declare `bool IsPlaylistEnabled(PrefService* prefs);`. What should the reviewer say?",
+    "choices": [
+      "Fine, since `PrefService` is a component rather than `//chrome` code",
+      "Move the helper into `core/browser/`, where prefs are valid",
+      "Forward-declare `PrefService` in the header instead of adding the DEPS rule",
+      "Keep it in `common/` but guard the declaration with `#if !BUILDFLAG(IS_IOS)`"
+    ],
+    "answer": 1,
+    "explain": "`common/` is compiled into every process that links the component, so it can't depend on browser-only APIs like `PrefService`, `Profile`, or `g_browser_process`. A new `+components/prefs` in a `common/DEPS` usually means the code belongs in `browser/`."
+  },
+  {
+    "rule": "ARCH-072",
+    "prompt": "You're reviewing:\n\n```cpp\nstd::unique_ptr<KeyedService>\nFooServiceFactory::BuildServiceInstanceForBrowserContext(\n    content::BrowserContext* context) const {\n  if (!UserPrefs::Get(context)->GetBoolean(kFooEnabledPref)) {\n    return nullptr;\n  }\n  return std::make_unique<FooService>(...);\n}\n```\n\n`kFooEnabledPref` is a user-facing toggle. What should change?",
+    "choices": [
+      "Always build the service and have it check the pref at runtime",
+      "Move the pref check into the static `GetForProfile()` accessor",
+      "Check `base::FeatureList` as well, so both must be enabled",
+      "Observe the pref and call `BrowserContextShutdown()` when it flips"
+    ],
+    "answer": 0,
+    "explain": "A factory may return `nullptr` only on session-stable attributes: profile type, buildflags, or feature flags. Gating on a user-toggleable pref (in the builder or the accessor) forces a restart for the toggle to take effect."
+  },
+  {
+    "rule": "ARCH-073",
+    "prompt": "A new window feature is written as:\n\n```cpp\nFooFeature::FooFeature(Browser* browser) : browser_(browser) {}\n\nvoid FooFeature::DoStuff() {\n  DoStuffWith(browser_->GetProfile()->GetPrefs());\n}\n```\n\nWhat's the preferred design?",
+    "choices": [
+      "Keep `Browser*` but store it as `raw_ref<Browser>` so it can't be null",
+      "Fetch prefs from `ProfileManager::GetActiveUserProfile()` instead",
+      "Take `BrowserWindowInterface*` instead, since it's the modern replacement",
+      "Inject the `PrefService&` it actually uses via the constructor"
+    ],
+    "answer": 3,
+    "explain": "Features should take exactly the dependencies they need at construction. `Browser` is a god object and globals hide coupling; even a narrower lookup key is worse than injecting the specific resolved dependency."
+  },
+  {
+    "rule": "ARCH-074",
+    "prompt": "A PR adds a new desktop tab-scoped feature, used only by normal browser tabs:\n\n```cpp\n// browser/brave_tab_helpers.cc\nFooTabHelper::MaybeCreateForWebContents(web_contents);\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Move it to `AttachPrivacySensitiveTabHelpers()` so it skips incognito",
+      "Own a plain class as a `unique_ptr` in `BraveTabFeatures::Init()`",
+      "Keep it, but add the helper to the presubmit allowlist",
+      "Call `CreateForWebContents()` from `brave_tab_features.cc` instead"
+    ],
+    "answer": 1,
+    "explain": "Tab-scoped features are plain classes owned by `BraveTabFeatures` and created in `Init()`. `AttachTabHelpers()` is only for helpers that must also attach to non-tab `WebContents`."
+  },
+  {
+    "rule": "ARCH-075",
+    "prompt": "You're reviewing a desktop tab feature:\n\n```cpp\nclass FooTabFeature : public content::WebContentsObserver {\n public:\n  explicit FooTabFeature(tabs::TabInterface& tab)\n      : WebContentsObserver(tab.GetContents()) {}\n};\n```\n\nWhat's the problem?",
+    "choices": [
+      "Nothing; a tab feature and its `WebContents` share the same lifetime",
+      "It should hold a `WeakPtr<WebContents>` so it can detect destruction",
+      "Discarding swaps the contents; use `ContentsObservingTabFeature`",
+      "Observers must be registered in `Init()`, not in the constructor"
+    ],
+    "answer": 2,
+    "explain": "On desktop, discarding a tab replaces its `WebContents`, so a cached observer or `WeakPtr` goes stale. Use `ContentsObservingTabFeature`, or hold the `TabInterface` and call `GetContents()` at the point of use."
+  }
+]

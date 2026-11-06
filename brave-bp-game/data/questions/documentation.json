@@ -1,0 +1,86 @@
+[
+  {
+    "rule": "DOC-001",
+    "prompt": "A PR refactors the `RewardsService` API. The author says: \"I'll update the README and method comments in a follow-up CL.\" Best response?",
+    "choices": [
+      "Fine — docs reviews should be separate so code review stays focused",
+      "Only the header comments must change now; READMEs can follow later",
+      "Fine, as long as a follow-up issue is filed and linked from the PR",
+      "Ask for the README and method docs to be updated in this same CL"
+    ],
+    "answer": 3,
+    "explain": "Docs changes belong in the same changelist as the code — separate doc CLs get forgotten and lose context, and reviewers benefit from seeing both together."
+  },
+  {
+    "rule": "DOC-002",
+    "prompt": "While editing a component you find a README section describing a sync flow you're fairly sure no longer exists, but nobody can confirm. What's the recommended move?",
+    "choices": [
+      "Delete it — when in doubt, default toward removal",
+      "Leave it alone since you're not 100% certain",
+      "Rewrite it from your best guess of how it works now",
+      "Leave it but add a \"may be outdated\" warning banner"
+    ],
+    "answer": 0,
+    "explain": "Dead documentation misleads and erodes trust. Remove content you know is wrong, and when in doubt default toward removal."
+  },
+  {
+    "rule": "DOC-004",
+    "prompt": "Which header comment best documents this method?\n\n```cpp\nstd::optional<PublisherInfo> GetPublisherInfo(const std::string& id);\n```",
+    "choices": [
+      "`// Returns nullopt if |id| isn't in the local DB. No network fetch; UI thread only.`",
+      "`// See https://github.com/brave/brave-core/pull/1234 for the design and details.`",
+      "`// Looks up |id| in publisher_map_, then calls ConvertRow() on the result.`",
+      "`// Gets the publisher info.`"
+    ],
+    "answer": 0,
+    "explain": "Method docs should describe the contract — behavior, params, return values, gotchas and restrictions (e.g. threading, staleness) — not restate the name or narrate the implementation."
+  },
+  {
+    "rule": "DOC-005",
+    "prompt": "You're creating a new major directory, `brave/browser/brave_rewards/`. What should its README.md contain?",
+    "choices": [
+      "A full class-by-class design doc covering every edge case",
+      "Purpose, key files, main API usage, and maintainers",
+      "Just a title for now; it'll be filled in once the code stabilizes",
+      "Nothing — header comments are enough documentation"
+    ],
+    "answer": 1,
+    "explain": "A README orients newcomers: purpose, key files, main API usage, and maintainers — starting with the simplest use case and building up."
+  },
+  {
+    "rule": "DOC-008",
+    "prompt": "A Brave doc on adding feature flags copies Chromium's step-by-step instructions verbatim. How should it be written?",
+    "choices": [
+      "Keep the copy so readers don't have to leave the Brave docs",
+      "Copy the instructions but add a \"last synced\" date",
+      "Link to the Chromium guide plus a short Brave-specific note",
+      "Delete the doc entirely; Brave devs should know upstream docs exist"
+    ],
+    "answer": 2,
+    "explain": "Duplicated docs drift out of sync. Link to the canonical source and add only the project-specific context (e.g. also register in `brave/browser/about_flags.cc`)."
+  },
+  {
+    "rule": "DOC-008",
+    "prompt": "You're adding a new entry to `docs/best-practices/coding-standards.md`. A reviewer suggests ending it with \"See PR #4567 and the Chromium style guide for details.\" Best response?",
+    "choices": [
+      "Accept — linking beats duplicating, as for all docs",
+      "Decline: best-practice entries must be self-contained",
+      "Accept, but link only to the PR, not external docs",
+      "Copy the entire Chromium style guide section into the entry instead"
+    ],
+    "answer": 1,
+    "explain": "Best-practice entries are the exception to \"link, don't duplicate\": distill the relevant rule, rationale, caveats and examples directly, with no links to PRs, other entries or external docs."
+  },
+  {
+    "rule": "DOC-011",
+    "prompt": "Your team proposes a 40-page comprehensive design doc for a feature, but nobody is assigned to keep it updated. Best advice?",
+    "choices": [
+      "Skip docs entirely and rely on code comments",
+      "Write the full doc now; even partly stale, comprehensive beats minimal",
+      "Write a small, accurate doc you'll actually maintain",
+      "Write the full doc and mark it \"historical\" when it goes stale"
+    ],
+    "answer": 2,
+    "explain": "A little fresh documentation beats lots of stale documentation. Treat docs like a bonsai: alive but frequently trimmed, focused on what saves the most developer time."
+  }
+]

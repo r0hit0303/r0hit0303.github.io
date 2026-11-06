@@ -1,0 +1,122 @@
+[
+  {
+    "rule": "TA-002",
+    "prompt": "A flaky browser test stops failing after the author adds one line just before the assertion:\n\n```cpp\nVLOG(1) << \"Checking distill state\";\nEXPECT_TRUE(IsDistilled());\n```\n\nCI has been green for 20 runs. What should the reviewer say?",
+    "choices": [
+      "Approve — 20 consecutive green CI runs are strong evidence the race is gone",
+      "Approve, but change `VLOG` to `LOG(INFO)` so it also works in release builds",
+      "Reject: it's a timing-based fake fix; synchronize on the real condition",
+      "Ask for a `std::this_thread::yield()` too, so the other thread reliably gets scheduled"
+    ],
+    "answer": 2,
+    "explain": "Logging, dummy work, reordering, and yields only change timing; they hide the race instead of fixing it. Never use a timing-based fix; add proper synchronization."
+  },
+  {
+    "rule": "TA-003",
+    "prompt": "A test sometimes checks `tab_helper()->PageDistillState()` before distillation finishes. Which fix addresses the root cause?",
+    "choices": [
+      "`ASSERT_TRUE(base::test::RunUntil([&] { return tab_helper()->PageDistillState() == kDistilled; }));`",
+      "`base::PlatformThread::Sleep(base::Milliseconds(500));` before checking `PageDistillState()`",
+      "`base::RunLoop().RunUntilIdle();` then `ASSERT_EQ(tab_helper()->PageDistillState(), DistillState::kDistilled);`",
+      "`ASSERT_TRUE(content::NavigateToURL(web_contents, url));` again, then check `PageDistillState()`"
+    ],
+    "answer": 0,
+    "explain": "Proper root cause analysis means identifying what races and waiting on the actual condition you care about (`RunUntil`, `TestFuture`, observers), not on arbitrary time."
+  },
+  {
+    "rule": "TA-004",
+    "prompt": "A teammate says: \"I extracted a helper method and the flake went away. If I inline it again, it flakes. Not sure why, but it works.\" How should you respond?",
+    "choices": [
+      "Ship it — the extracted helper is cleaner code, so the refactor is an improvement anyway",
+      "Ship it, with a comment saying not to inline the helper",
+      "It's not a fix: without explaining the synchronization, the race is still there",
+      "Run it 100 times locally under load; if it never fails, the race is effectively fixed"
+    ],
+    "answer": 2,
+    "explain": "If removing your \"fix\" brings the flake back but you can't explain WHY it fixes the race, it's not a real fix. Real fixes are deterministic, explainable, and robust."
+  },
+  {
+    "rule": "TA-005",
+    "prompt": "```cpp\nservice->StartSync();\nbase::RunLoop().RunUntilIdle();\nEXPECT_TRUE(service->IsSynced());\n```\n\nWhat's the problem with this test?",
+    "choices": [
+      "Nothing — `RunUntilIdle()` drains every pending task, so the sync result is deterministic",
+      "It should call `RunUntilIdle()` twice, since sync may post a follow-up task",
+      "It should use `ASSERT_TRUE` so a failed sync stops the test immediately",
+      "`RunUntilIdle()` is forbidden: it can return early or time out; wait on the condition"
+    ],
+    "answer": 3,
+    "explain": "Chromium style forbids `RunLoop::RunUntilIdle()` for async tests. It can return too early when events depend on other task queues, or run too long, which makes tests flaky."
+  },
+  {
+    "rule": "TA-006",
+    "prompt": "A browser test must wait until the Speedreader bubble appears, i.e. until `tab_helper()->speedreader_bubble_view()` is non-null. Which wait follows the standard?",
+    "choices": [
+      "Loop `NonBlockingDelay(base::Milliseconds(100))` until `speedreader_bubble_view()` is non-null",
+      "`ASSERT_TRUE(base::test::RunUntil([this]() { return tab_helper()->speedreader_bubble_view(); }));`",
+      "`base::RunLoop().RunUntilIdle();` then `ASSERT_TRUE(tab_helper()->speedreader_bubble_view());`",
+      "`EXPECT_TRUE(content::EvalJs(web_contents, \"!!document.querySelector('#speedreader-bubble')\"))`"
+    ],
+    "answer": 1,
+    "explain": "To wait on C++ state or object properties, use `base::test::RunUntil()` with a lambda that checks the condition directly."
+  },
+  {
+    "rule": "TA-008",
+    "prompt": "```cpp\nASSERT_TRUE(base::test::RunUntil([&]() {\n  return content::EvalJs(web_contents, \"window.ready\").ExtractBool();\n}));\n```\n\nWhat's wrong?",
+    "choices": [
+      "`EvalJs` spins its own run loop; don't nest run-loop operations inside `RunUntil`",
+      "Nothing — `RunUntil` is designed for polling JS state, and `EvalJs` is synchronous",
+      "It should use `ExecJs`, because `EvalJs(...).ExtractBool()` crashes on non-bool values",
+      "The lambda should capture `web_contents` by value, since `RunUntil` may call it later"
+    ],
+    "answer": 0,
+    "explain": "Never call something that spins its own run loop (`EvalJs`, `ExecJs`, IPC that waits for a response) inside `RunUntil()`. Only direct C++ state checks, getters, and property checks are safe."
+  },
+  {
+    "rule": "TA-009",
+    "prompt": "```cpp\nbase::RunLoop run_loop;\nbool result = false;\nservice->CheckPurchaseState(\n    base::BindLambdaForTesting([&](bool is_purchased) {\n      result = is_purchased;\n      run_loop.Quit();\n    }));\nrun_loop.Run();\nEXPECT_FALSE(result);\n```\n\nWhat will a reviewer ask for?",
+    "choices": [
+      "Nothing — `RunLoop` plus `BindLambdaForTesting` is the canonical callback-waiting pattern",
+      "Replace `run_loop.Run()` with `RunUntilIdle()` so the test can't hang if the callback never fires",
+      "Use `run_loop.QuitClosure()` instead of calling `Quit()` in the lambda",
+      "Use `base::test::TestFuture<bool>`: pass `future.GetCallback()`, check `future.Get()`"
+    ],
+    "answer": 3,
+    "explain": "Always use `base::test::TestFuture` for `OnceCallback`-based operations; it's shorter and less error-prone. Reviewers flag `RunLoop` + `BindLambdaForTesting` + `Quit()` when `TestFuture` would work."
+  },
+  {
+    "rule": "TA-010",
+    "prompt": "A browser test sends `Init()` asynchronously over the Solana provider Mojo interface, then needs to be sure it was processed before asserting. Which approach is precise and deterministic?",
+    "choices": [
+      "`base::PlatformThread::Sleep(base::Milliseconds(100))`, which covers Mojo's typical latency",
+      "A sync call on the same interface, e.g. read `window.braveSolana.isConnected`",
+      "Call `RunUntilIdle()` in both the browser and renderer processes to flush the Mojo pipe",
+      "Send `Init()` twice so at least one is processed"
+    ],
+    "answer": 1,
+    "explain": "Mojo processes messages in order on a given interface. A synchronous call on that interface guarantees all earlier async messages on it have been handled, which is a precise alternative to polling."
+  },
+  {
+    "rule": "TA-011",
+    "prompt": "`object_under_test.DoSomethingAsync(base::OnceClosure done)` takes a plain closure, and you need manual run-loop control that `TestFuture` doesn't give you. What's the accepted pattern?",
+    "choices": [
+      "Pass `base::DoNothing()` as `done`, then call `RunUntilIdle()` to drain the async work",
+      "Poll with `RunUntil` and an `ExecJs` check that the page reflects the result",
+      "Create a `base::RunLoop`, pass `run_loop.QuitClosure()`, then `run_loop.Run()`",
+      "Sleep briefly with `PlatformThread::Sleep`, then check the result object's state"
+    ],
+    "answer": 2,
+    "explain": "When `TestFuture` doesn't fit, pass `run_loop.QuitClosure()` and call `run_loop.Run()`, which waits specifically for that closure to fire."
+  },
+  {
+    "rule": "TA-012",
+    "prompt": "```cpp\nservice->UpdateSettings(new_settings);\nEXPECT_EQ(true, content::EvalJs(web_contents, \"isSettingEnabled()\"));\n```\n\n`UpdateSettings` is an async Mojo call, and the test is flaky. Best fix?",
+    "choices": [
+      "Wrap the `EvalJs` check in `base::test::RunUntil` so it retries until the setting applies",
+      "Add `RunUntilIdle()` between the two lines so the Mojo message is flushed first",
+      "Repeat the `EvalJs` check up to three times to absorb the Mojo round-trip latency",
+      "Pass a `TestFuture` callback to `UpdateSettings`, wait on `future.Get()`, then `EvalJs`"
+    ],
+    "answer": 3,
+    "explain": "Don't call `EvalJs` right after an async Mojo operation; the message may not be processed yet. Synchronize on the Mojo response first, with a `TestFuture` or `RunUntil` on C++ state."
+  }
+]

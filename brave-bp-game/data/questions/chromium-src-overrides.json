@@ -1,0 +1,242 @@
+[
+  {
+    "rule": "CSRC-001",
+    "prompt": "You need to change some upstream Chromium behavior and can't do it purely within brave-core. In what order of preference should you reach for options?",
+    "choices": [
+      "A patch first, since it's the most explicit and reviewable, then chromium_src",
+      "Brave-only code, then chromium_src, then a patch as last resort",
+      "chromium_src and patches are equally fine; pick whichever is shorter",
+      "Edit `src/` directly and skip generating patch files"
+    ],
+    "answer": 1,
+    "explain": "Avoid modifying Chromium whenever possible. When unavoidable, chromium_src overrides are strongly preferred; patches (generated with `pnpm run update_patches`) are the last resort and should be minimal."
+  },
+  {
+    "rule": "CSRC-002",
+    "prompt": "An upstream test fails in Brave because of an intentional behavior change. A PR adds this to a chromium_src override:\n\n```cpp\n#define SomeUpstreamTest DISABLED_SomeUpstreamTest\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Disable it via a `test/filters/` file and keep Brave's version in a Brave test target",
+      "Fine — `#define`-renaming to `DISABLED_` is the standard way to disable upstream tests",
+      "Keep the `#define` but add an `#undef` after the include so it doesn't leak",
+      "Patch the upstream test file to add `DISABLED_` instead"
+    ],
+    "answer": 0,
+    "explain": "Never disable upstream tests via `#define ... DISABLED_...` in chromium_src. Use filter files in `test/filters/`, and move Brave-specific replacements into `brave_unit_tests`, `brave_browser_tests`, etc."
+  },
+  {
+    "rule": "CSRC-003",
+    "prompt": "You need different color logic in `ChromeTypographyProvider::GetColor` only when `ShouldIgnoreHarmonySpec()` is false. Which override shape is preferred?",
+    "choices": [
+      "Copy the full 50-line upstream function and edit the 3 lines that differ",
+      "Patch upstream `GetColor` with an `if` block that calls into Brave code",
+      "Return `ChromiumImpl::GetColor(...)` unless the condition applies",
+      "Replace the whole class with a dummy no-op implementation"
+    ],
+    "answer": 2,
+    "explain": "Minimize duplication in overrides: wrap only the changed section and fall back to `ChromiumImpl` for everything else."
+  },
+  {
+    "rule": "CSRC-004",
+    "prompt": "An upstream `.cc` file needs to `#include \"brave/components/my_feature/my_header.h\"`. A PR does this by adding a one-line patch. What's preferred?",
+    "choices": [
+      "A one-line patch is ideal; keep it",
+      "Add the header to the upstream target's `public_deps` via a GN arg",
+      "Copy the upstream file into brave-core and include it there",
+      "Add the include via a chromium_src override"
+    ],
+    "answer": 3,
+    "explain": "Always prefer a chromium_src override over a patch — patches are harder to maintain, conflict more, and are harder to review. Required headers should be added through chromium_src, not patches."
+  },
+  {
+    "rule": "CSRC-005",
+    "prompt": "A chromium_src override reproduces an entire 60-line upstream method because 3 lines need to change. What's the standard?",
+    "choices": [
+      "Acceptable if the copied code has a comment marking the changed lines",
+      "Copy the whole file instead, so the method stays consistent with its neighbors",
+      "Acceptable as long as `check_chromium_src.py` passes",
+      "Override only the changed part; call the original for the rest"
+    ],
+    "answer": 3,
+    "explain": "Never copy entire Chromium files or methods into chromium_src. Override only what needs to change and delegate to the superclass for everything else."
+  },
+  {
+    "rule": "CSRC-007",
+    "prompt": "You need `TabStrip` to create a `BraveNewTabButton` instead of `NewTabButton`. Which approach follows the standard?",
+    "choices": [
+      "Patch `tab_strip.cc` to construct `BraveNewTabButton` directly",
+      "Patch every method of `NewTabButton` that needs Brave behavior",
+      "A chromium_src `#define NewTabButton BraveNewTabButton`",
+      "Copy `tab_strip.cc` into chromium_src with the one-line change applied"
+    ],
+    "answer": 2,
+    "explain": "Prefer subclassing over patching, in both C++ and Java. Swapping in a Brave subclass via chromium_src (or one patch changing a superclass in Java) is easier to maintain than patching individual methods."
+  },
+  {
+    "rule": "CSRC-012",
+    "prompt": "Inside a chromium_src override, which include is correct?",
+    "choices": [
+      "`#include \"brave/chromium_src/net/proxy_resolution/proxy_resolution_service.h\"`",
+      "`#include \"net/proxy_resolution/proxy_resolution_service.h\"`",
+      "`#include \"../../../net/proxy_resolution/proxy_resolution_service.h\"`",
+      "`#include \"chromium_src/net/proxy_resolution/proxy_resolution_service.h\"`"
+    ],
+    "answer": 1,
+    "explain": "In chromium_src overrides, always include the original header path, never the chromium_src version."
+  },
+  {
+    "rule": "CSRC-014",
+    "prompt": "Brave wants to fully disable `TranslateURLFetcher`. A PR adds two patches (one for the `.h`, one for the `.cc`). What's the preferred approach?",
+    "choices": [
+      "Dummy no-op `.h`/`.cc` replacements in chromium_src",
+      "Keep the two patches but combine them into one",
+      "Add `#define TranslateURLFetcher BraveTranslateURLFetcher` and subclass it",
+      "Remove the class from the upstream BUILD.gn via a GN patch"
+    ],
+    "answer": 0,
+    "explain": "To disable or replace a Chromium class entirely, add minimal no-op dummy replacements in chromium_src for the `.h` and `.cc` — no patch needed and easier maintenance."
+  },
+  {
+    "rule": "CSRC-015",
+    "prompt": "You need `SomeClass::SomeMethod` to be virtual so a Brave subclass can override it. Which approach is correct?",
+    "choices": [
+      "A plaster rewrite with `make_virtual`",
+      "`#define SomeMethod virtual SomeMethod` around the upstream header include",
+      "`#define final` around the upstream include",
+      "Subclass and hide the method with a same-named non-virtual one"
+    ],
+    "answer": 0,
+    "explain": "Don't use `#define` to add `virtual` — it rewrites every `SomeMethod` in the translation unit. Use the `make_virtual` plaster rewriter, which also handles pointer/reference return types and destructors."
+  },
+  {
+    "rule": "CSRC-016",
+    "prompt": "```cpp\n#define final\n#include \"src/chrome/browser/ui/views/side_panel/side_panel_coordinator.h\"\n#undef final\n```\n\nWhat's the reviewer's verdict?",
+    "choices": [
+      "Accept, since the `#undef` immediately limits the scope",
+      "Accept if `final` appears only once in that header and nowhere in its includes",
+      "Replace it with `#define final override`",
+      "Reject: it's undefined behavior and viral"
+    ],
+    "answer": 3,
+    "explain": "Never `#define final` — it's undefined behavior per the C++ standard and can break unrelated code using `final`. Use a minimal patch to remove `final` or find another approach."
+  },
+  {
+    "rule": "CSRC-017",
+    "prompt": "A new chromium_src override replaces `TabView::BuildContextMenu()`. A per-function comment already explains it adds Brave menu items because upstream isn't extensible there. A reviewer also asks for a file-level comment. Correct?",
+    "choices": [
+      "Yes — every override file needs a file-level header comment",
+      "Yes — and each method injected via `#define` also needs its own doc comment",
+      "No — per-function comments are enough",
+      "No — chromium_src overrides should never have comments"
+    ],
+    "answer": 2,
+    "explain": "chromium_src overrides should explain why they're needed, but a file-level comment isn't required if per-function comments cover it. Don't ask for doc comments inside `#define` macro bodies either."
+  },
+  {
+    "rule": "CSRC-018",
+    "prompt": "You add a new `#include` of a Brave header to a chromium_src override. How do you verify the dependency is wired up?",
+    "choices": [
+      "If it compiles locally, the dependency is fine",
+      "Add the include to the upstream file temporarily and run `gn check`",
+      "Run `check_chromium_src.py`, which validates GN deps for override includes",
+      "Add the header to `brave/BUILD.gn` `public_deps` to be safe"
+    ],
+    "answer": 1,
+    "explain": "The override compiles as part of the upstream target, which may lack deps on your headers. Test by adding the include to the upstream file and running `gn check`; if it fails, the dep must be added."
+  },
+  {
+    "rule": "CSRC-019",
+    "prompt": "A chromium_src override of `window_feature_controller.cc` includes `brave/browser/ui/views/tabs/vertical_tab_utils.h`, and a patch adds `//brave/browser/ui/views/tabs` to the upstream target's deps. What's the preferred design?",
+    "choices": [
+      "Keep the include but move the GN dependency into `sources.gni` instead of a patch",
+      "Keep it; a single Brave include in an override is acceptable",
+      "Forward-declare a hook in the override; implement it in a Brave target",
+      "Copy `vertical_tab_utils.h` into chromium_src so no dep is needed"
+    ],
+    "answer": 2,
+    "explain": "chromium_src should avoid depending on `//brave/...` targets — that creates an upstream→Brave dep. Forward-declare a hook in the override, implement it in a dedicated Brave target, and have a top-level Brave target depend on it."
+  },
+  {
+    "rule": "CSRC-020",
+    "prompt": "In a chromium_src override you see:\n\n```cpp\nprovider_ = nullptr;\n```\n\nwith no context. What should the reviewer ask for?",
+    "choices": [
+      "Replace it with `provider_.reset()` so the ownership is explicit",
+      "Remove it — upstream code will null the pointer during shutdown anyway",
+      "Wrap it in `DCHECK(provider_)` first",
+      "A comment explaining why it's reset, e.g. to avoid a dangling pointer"
+    ],
+    "answer": 3,
+    "explain": "Add comments for non-obvious `nullptr` assignments in chromium_src — the override is out of context from the original file, so intent (like dangling-pointer prevention) isn't clear."
+  },
+  {
+    "rule": "CSRC-021",
+    "prompt": "You add `constexpr int kBravePolicySource = 10;` after upstream's `POLICY_SOURCE_COUNT`. What protects against upstream adding values?",
+    "choices": [
+      "A `DCHECK` at startup comparing upstream's count with `kBravePolicySource`",
+      "A `static_assert` that the upstream count is `<= kBravePolicySource`",
+      "Choosing a large value like `1000` so clashes are unlikely",
+      "A unit test that logs the enum count"
+    ],
+    "answer": 1,
+    "explain": "When appending custom values after an upstream enum, add a `static_assert` so the build fails if upstream grows the enum and values would clash."
+  },
+  {
+    "rule": "CSRC-022",
+    "prompt": "You're adding a Brave-specific Blink runtime-enabled feature `BraveGlobalPrivacyControl`. Where does it go?",
+    "choices": [
+      "`runtime_enabled_features.override.json5`",
+      "A patch to `runtime_enabled_features.json5`",
+      "A chromium_src override of `runtime_enabled_features.cc`",
+      "A new `base::Feature` in `brave/components/` only"
+    ],
+    "answer": 0,
+    "explain": "Add Brave Blink runtime-enabled features to `runtime_enabled_features.override.json5` — it's designed for downstream additions and avoids patch conflicts with `runtime_enabled_features.json5`."
+  },
+  {
+    "rule": "CSRC-023",
+    "prompt": "You need to change `PrivateHelper()`, defined in an anonymous namespace in upstream `chrome/browser/feature.cc`. How?",
+    "choices": [
+      "Use a `.patch` file",
+      "A chromium_src override that `#define`s `PrivateHelper` to a Brave function",
+      "Subclass the file's class and override `PrivateHelper`",
+      "Use `make_virtual` on `PrivateHelper`"
+    ],
+    "answer": 0,
+    "explain": "chromium_src overrides only work for symbols with external linkage. Static or anonymous-namespace functions in upstream `.cc` files aren't visible outside the TU, so use a patch."
+  },
+  {
+    "rule": "CSRC-024",
+    "prompt": "Upstream calls `l10n_util::GetStringFUTF16(IDS_FOO, site_name)` (one `$1`). You `#define` `IDS_FOO` to `IDS_BRAVE_FOO`. What must be true of `IDS_BRAVE_FOO`?",
+    "choices": [
+      "It must have no placeholders at all",
+      "Any placeholders are fine; extra ones are filled with empty strings",
+      "Its placeholders must be compatible with the upstream caller's",
+      "It must have at least two placeholders for flexibility"
+    ],
+    "answer": 2,
+    "explain": "Replacement strings must match the placeholders the upstream caller provides. Fewer are silently ignored; more or different ones can cause runtime errors."
+  },
+  {
+    "rule": "CSRC-025",
+    "prompt": "You're reviewing a chromium_src override that swaps an upstream string:\n\n```cpp\n#undef IDS_PASSWORD_MANAGER_UI_EMPTY_STATE_SYNCING_USERS\n#define IDS_PASSWORD_MANAGER_UI_EMPTY_STATE_SYNCING_USERS \\\n  IDS_BRAVE_PASSWORD_MANAGER_UI_EMPTY_STATE\n```\n\nWhat should be added?",
+    "choices": [
+      "Nothing — `check_chromium_src.py` already makes any extra guard redundant",
+      "An `#ifndef`/`#error` guard before the `#undef`",
+      "Wrap the `#undef` in `#if defined(...)` so it's skipped if the ID disappears",
+      "A runtime `DCHECK` that the string resource loads successfully"
+    ],
+    "answer": 1,
+    "explain": "Guard overridden string IDs with `#ifndef`/`#error` so a rebase that removes or renames the upstream ID fails at compile time — an extra safety net on top of `check_chromium_src.py`."
+  },
+  {
+    "rule": "CSRC-026",
+    "prompt": "In a chromium_src override where the upstream class was renamed via `#define` to `ChromiumImpl`:\n\n```cpp\nSkColor BraveProvider::GetColor(int id) {\n  return ChromeTypographyProvider::GetColor(id);\n}\n```\n\nWhat's wrong?",
+    "choices": [
+      "Nothing — `ChromeTypographyProvider` is the upstream class, so it's correct",
+      "It should call `BraveProvider::GetColor(id)` recursively",
+      "It should use `Super::GetColor(id)`",
+      "It should call `ChromiumImpl::GetColor(id)`"
+    ],
+    "answer": 3,
+    "explain": "Fallback methods must call the correct base class. With `#define` renames changing the hierarchy, the upstream implementation is `ChromiumImpl`, not the original class name."
+  }
+]

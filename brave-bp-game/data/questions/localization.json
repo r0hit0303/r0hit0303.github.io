@@ -1,0 +1,230 @@
+[
+  {
+    "rule": "LOC-001",
+    "prompt": "```xml\n<message name=\"IDS_FOO_TITLE\" desc=\"Title for the Foo settings section\"\n         translateable=\"true\">\n  Foo\n</message>\n```\n\nWhat should the reviewer say about this `.grdp` entry?",
+    "choices": [
+      "Good — always mark strings explicitly translateable so the tooling picks them up",
+      "Change it to `translatable=\"true\"` (correct spelling)",
+      "Remove it — `translateable=\"true\"` is the default",
+      "Replace it with `translateable=\"false\"` for settings titles"
+    ],
+    "answer": 2,
+    "explain": "`translateable=\"true\"` is the default in GRD/GRDP files, so never add it explicitly. Only `translateable=\"false\"` is meaningful to the tooling."
+  },
+  {
+    "rule": "LOC-002",
+    "prompt": "Which menu-item string follows Brave's UI text conventions?",
+    "choices": [
+      "`Save page as...`",
+      "`Save page as . . .`",
+      "`Save page as`",
+      "`Save page as…`"
+    ],
+    "answer": 3,
+    "explain": "Use the proper Unicode ellipsis character `…` instead of three periods `...` in user-facing strings."
+  },
+  {
+    "rule": "LOC-003",
+    "prompt": "Which `desc` best serves translators for a string whose text is just \"History\"?",
+    "choices": [
+      "`desc=\"History\"`",
+      "`desc=\"Title for the browser visits history section of a URL picker\"`",
+      "`desc=\"History text shown in the URL picker, translate as appropriate\"`",
+      "`desc=\"\"` (left empty since the text is self-explanatory)"
+    ],
+    "answer": 1,
+    "explain": "Translators often see only the description, so add context: the UI element type and disambiguation (browser vs. conversation history). Never leave `desc` empty — though for truly self-evident strings like \"Cancel\", a brief description is fine."
+  },
+  {
+    "rule": "LOC-003",
+    "prompt": "A reviewer insists a `Cancel` button string needs a three-sentence description. Another string uses the same copy-pasted `desc` as an unrelated tooltip. Which feedback is valid?",
+    "choices": [
+      "Only the copy-pasted `desc` needs fixing",
+      "Both are fine; descriptions are optional as long as the string text is clear",
+      "Both need fixing: every `desc` must be several sentences",
+      "Only the `Cancel` one needs fixing; reusing descriptions is encouraged"
+    ],
+    "answer": 0,
+    "explain": "Each description must be unique to its purpose, specify the UI element type, and be proofread. But don't insist on verbose descriptions for strings that speak for themselves."
+  },
+  {
+    "rule": "LOC-004",
+    "prompt": "In a new Lit-based WebUI component, how should localized strings be accessed?",
+    "choices": [
+      "Call `loadTimeData.getString()` directly in `render()`",
+      "Hardcode English and let the build translate it",
+      "Use `I18nMixinLit`",
+      "Fetch strings over a mojo call at startup"
+    ],
+    "answer": 2,
+    "explain": "In Lit WebUI components, use `I18nMixinLit` instead of calling `loadTimeData.getString()` directly — it's the standard, consistent i18n approach."
+  },
+  {
+    "rule": "LOC-005",
+    "prompt": "You need to change the wording of an upstream string defined in `app/generated_resources.grd`. What's the correct approach?",
+    "choices": [
+      "Edit the text directly in `app/generated_resources.grd`",
+      "Patch `app/generated_resources.grd` and regenerate with `pnpm run update_patches`",
+      "Edit each locale's `.xtb` file with the new translation",
+      "Add a Brave string and redirect the upstream `IDS_` via chromium_src"
+    ],
+    "answer": 3,
+    "explain": "Never modify upstream GRD/GRDP files — they're replaced on every Chromium bump. Add the string to the Brave GRD/GRDP and redirect the upstream `IDS_` constant via a chromium_src `#undef`/`#define`."
+  },
+  {
+    "rule": "LOC-006",
+    "prompt": "Brave needs a simple word substitution applied across many upstream strings in all locales. What's the recommended tool?",
+    "choices": [
+      "`grd_string_replacements.py` with `default_replacements`",
+      "A chromium_src `#undef`/`#define` override for each affected `IDS_` constant",
+      "Manually edit each upstream GRD file and all its `.xtb` translations",
+      "A runtime string replace in `l10n_util::GetStringUTF16`"
+    ],
+    "answer": 0,
+    "explain": "For simple word/phrase substitutions across upstream strings, use `brave/script/lib/l10n/grd_string_replacements.py` with `default_replacements` and `pnpm run chromium_rebase_l10n` — it applies consistently across all locales."
+  },
+  {
+    "rule": "LOC-007",
+    "prompt": "You add a string to the AI Chat WebUI GRDP file, whose WebUI component is `AiChat`. Which attribute is correct?",
+    "choices": [
+      "`formatter_data=\"webui=AIChat\"`",
+      "`formatter_data=\"webui=AiChat\"`",
+      "`formatter_data=\"webui=ai_chat\"`",
+      "No `formatter_data` — the build infers it from the file path"
+    ],
+    "answer": 1,
+    "explain": "WebUI GRDP strings need `formatter_data=\"webui=ComponentName\"` that exactly matches the WebUI component identifier; a typo or mismatch means the string won't be in that bundle."
+  },
+  {
+    "rule": "LOC-008",
+    "prompt": "Which placeholder follows the GRD/GRDP standard?",
+    "choices": [
+      "`<ph name=\"SITE_NAME\">$1<ex>example.com</ex></ph>`",
+      "`<ph name=\"PH_1\">$1</ph>`",
+      "`<ph name=\"siteName\">$1<ex>example.com</ex></ph>`",
+      "`<ph name=\"SITE_NAME\">$1</ph>` (examples are optional)"
+    ],
+    "answer": 0,
+    "explain": "Placeholders need descriptive SCREAMING_SNAKE_CASE names and an `<ex>` example showing translators the runtime value. Use `LINK_BEGIN`/`LINK_END` for link placeholders."
+  },
+  {
+    "rule": "LOC-009",
+    "prompt": "A settings group has two sibling toggle labels: \"Background Image\" and \"Brave backgrounds\". What's the reviewer's feedback?",
+    "choices": [
+      "Fine — each string can choose its own capitalization based on its own content",
+      "Both should be all lowercase for a modern look",
+      "Only the first word of a label may ever be capitalized",
+      "Same level, mixed title and sentence case; make them consistent"
+    ],
+    "answer": 3,
+    "explain": "Strings within a feature or UI surface must use consistent capitalization. Title case is for page titles, section headers, buttons, and menu items; sentence case for descriptions, body text, tooltips, and helper text."
+  },
+  {
+    "rule": "LOC-010",
+    "prompt": "Which string follows Brave's UI text conventions?",
+    "choices": [
+      "\"Sync bookmarks, passwords, etc. with Shields on\"",
+      "\"Sync our bookmarks, passwords, and more with Shields on\"",
+      "\"Sync bookmarks, passwords, and more with Shields up\"",
+      "\"Sync bookmarks, passwords, etc. with Shields up\""
+    ],
+    "answer": 2,
+    "explain": "Use \"and more\" instead of \"etc.\", \"Brave's\" instead of \"our\", and match established feature vocabulary (Shields are \"up/down\", not \"on/off\")."
+  },
+  {
+    "rule": "LOC-010",
+    "prompt": "Which description is better for a button that shares open tabs with the AI assistant?",
+    "choices": [
+      "\"Send your tabs' contents\"",
+      "\"Send the content of your tabs to Brave AI\"",
+      "\"Send your tabs\"",
+      "\"Send our tabs' contents to our AI assistant\""
+    ],
+    "answer": 1,
+    "explain": "Be explicit about data-sharing actions (say where data goes), avoid possessive constructions like \"tabs' contents\" for translatability, and use \"Brave\" rather than \"our\"."
+  },
+  {
+    "rule": "LOC-011",
+    "prompt": "A PR adds five new `IDS_` strings to a GRDP \"for an upcoming follow-up\", but none are referenced in code yet. What should the reviewer say?",
+    "choices": [
+      "Fine — adding strings early gives translators a head start before the feature lands",
+      "Fine, as long as they're marked `translateable=\"true\"`",
+      "Remove them until code references them; every string goes to translation",
+      "Keep them but give them empty descriptions"
+    ],
+    "answer": 2,
+    "explain": "Only add GRD/GRDP strings that are actively referenced in the codebase, and remove strings that become unused. Reviewers should verify each `IDS_` constant is actually used."
+  },
+  {
+    "rule": "LOC-012",
+    "prompt": "After a Chromium rebase, new upstream strings mention \"Google Pay\" and \"Gemini\". What's expected?",
+    "choices": [
+      "Review them and replace Google product names with Brave branding",
+      "Leave them — upstream strings are never shown in Brave",
+      "Replace \"Google Pay\" with \"Brave Wallet\" everywhere it appears in the new strings",
+      "Wait for users to report the branding issue"
+    ],
+    "answer": 0,
+    "explain": "During rebases, review new upstream strings for Google product names and ensure correct Brave branding. Note \"Brave Wallet\" means the crypto wallet only — not general autofill/payment cards."
+  },
+  {
+    "rule": "LOC-013",
+    "prompt": "```tsx\ngetLocale(`CHAT_UI_${model.key.toUpperCase().replaceAll('-', '_')}_SUBTITLE`)\n```\n\nWhat's the problem?",
+    "choices": [
+      "Template literals are slower than string concatenation",
+      "It should use `toLowerCase()` to match key conventions",
+      "Nothing, provided every model key has a matching string defined in the GRDP",
+      "It defeats static analysis and dead-string detection"
+    ],
+    "answer": 3,
+    "explain": "Never construct `getLocale()` keys dynamically — it defeats static analysis, prevents dead string detection, and breaks if key formats change. Use explicit keys like `S.CHAT_UI_CLAUDE_SUBTITLE`, or have the data source provide the string."
+  },
+  {
+    "rule": "LOC-014",
+    "prompt": "```cpp\nhtml_source->AddString(\n    \"sectionDescription\",\n    l10n_util::GetStringFUTF16(IDS_SECTION_DESCRIPTION, kLearnMoreURL));\n```\n\nWhat's the recommended alternative?",
+    "choices": [
+      "Embed the full `<a href>` markup into the GRD string itself so translators see it",
+      "Pass the URL as a separate string; build the link in the UI",
+      "Keep it, but escape the URL with `base::EscapeForHTML`",
+      "Hardcode the URL into each locale's translation"
+    ],
+    "answer": 1,
+    "explain": "Build links in the UI, not in localized strings. Pass the URL separately (via `AddString` or a mojom constant) instead of formatting it into the localized string in C++."
+  },
+  {
+    "rule": "LOC-015",
+    "prompt": "Which settings toggle description is punctuated correctly?",
+    "choices": [
+      "\"Block trackers on all sites.\" (single sentence, with period)",
+      "\"Block trackers on all sites\" (single sentence, no period)",
+      "\"Block trackers on all sites. This may break some sites\" (no final period)",
+      "\"Block trackers on all sites!\" (exclamation)"
+    ],
+    "answer": 1,
+    "explain": "Single-sentence toggle descriptions don't end with a period; multi-sentence descriptions do end with a period on the last sentence."
+  },
+  {
+    "rule": "LOC-016",
+    "prompt": "A string reviewer sees: \"Some extensions are non compatible on this page and\". What should they flag?",
+    "choices": [
+      "Nothing — translators will clean up the grammar in each language anyway",
+      "Only that it should be in title case",
+      "It's truncated, and \"non compatible\" needs a hyphen",
+      "Only that it should end with an ellipsis"
+    ],
+    "answer": 2,
+    "explain": "Strings must be complete, grammatically correct, and properly punctuated — no truncated sentences, hyphenated compound adjectives, and appropriate prepositions — since translators use the English source as reference."
+  },
+  {
+    "rule": "LOC-017",
+    "prompt": "Your PR adds three new user-facing strings to a dialog. What should you include for string review?",
+    "choices": [
+      "A screenshot attached as an inline code review comment",
+      "Just the GRDP diff — it shows the exact text",
+      "A link to the design mock instead of the real UI",
+      "A screenshot of the rendered UI in the PR description"
+    ],
+    "answer": 3,
+    "explain": "When adding or modifying user-facing strings, include a screenshot of the actual rendered UI in the PR description (not inline comments) so reviewers can check truncation, capitalization, layout, and terminology."
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "rule": "PLSTR-001",
+    "prompt": "A plaster config needs to change the `return false;` inside `IsFeatureEnabled()` to `return true;`. The author wrote:\n\n```yaml\nre_pattern: 'return false;'\nreplace: 'return true;'\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — plaster only ever replaces the first match, so the literal is safe",
+      "Switch to a `#define` in chromium_src so the override is compile-checked",
+      "Add `re_flags: [DOTALL]` so the regex can match across lines",
+      "Anchor the pattern on `IsFeatureEnabled()` and its surrounding context"
+    ],
+    "answer": 3,
+    "explain": "Plaster patterns should match method names or other relevant context to ensure a single, targeted match. A bare `return false;` can match many places and drift during Chromium updates; broad patterns are only for when you *intend* to replace every occurrence."
+  },
+  {
+    "rule": "PLSTR-001",
+    "prompt": "You want to rename every use of `kOldConstant` in an upstream file to `kBraveConstant`. Which plaster pattern is appropriate?",
+    "choices": [
+      "A regex anchored on the first function using `kOldConstant`, to stay targeted",
+      "`re_pattern: 'kOldConstant'` — simple is fine when every instance should match",
+      "One substitution per call site, each anchored on its enclosing method",
+      "A `#define kOldConstant kBraveConstant` in chromium_src, since it's just a rename"
+    ],
+    "answer": 1,
+    "explain": "Targeted context is the default, but simple patterns are correct when you intentionally want to replace all occurrences of something in the file."
+  },
+  {
+    "rule": "PLSTR-002",
+    "prompt": "Which plaster substitution is fragile and should be rewritten?\n\n```yaml\n# A\npattern: 'kOldConstantName'\nreplace: 'kNewConstantName'\n# B\npattern: 'return NavigateWebAppUsingParams(nav_params);'\nreplace: 'return BraveNavigateWebAppUsingParams(&profile_.get(), *params_, nav_params);'\n# C\npattern: 'if (MyMethod() && my_bool) {'\nreplace: 'if (BraveMethod() && my_bool) {'\n```",
+    "choices": [
+      "A — bare symbol renames always need `re_pattern` with word boundaries",
+      "B — whole statements are too long and brittle to use with `pattern`",
+      "C — it drags in `&& my_bool` and the brace, which aren't replaced",
+      "None of them; all three use `pattern` correctly for literal text"
+    ],
+    "answer": 2,
+    "explain": "The test isn't literal length but \"is every token part of what I'm changing?\" `&& my_bool` and the brace can change upstream without affecting the rewrite, so C needs `re_pattern`."
+  },
+  {
+    "rule": "PLSTR-002",
+    "prompt": "An author writes this to swap a call that sits inside an indented block:\n\n```yaml\npattern: '    MyMethod()'\nreplace: '    BraveMethod()'\n```\n\nBest review feedback?",
+    "choices": [
+      "Good — including the indentation makes the match more specific and safer",
+      "Use `re_pattern` with flexible whitespace, e.g. `'(^\\s+)(MyMethod\\(\\))'`",
+      "Drop the plaster and patch the file directly, since it's a one-line change",
+      "Wrap the literal in double quotes so YAML ignores the leading whitespace"
+    ],
+    "answer": 1,
+    "explain": "`pattern` requires an exact whitespace match, so leading indentation makes it break if upstream reindents. When the match needs to reach beyond the replaced text (like flexible whitespace), use `re_pattern`."
+  },
+  {
+    "rule": "PLSTR-003",
+    "prompt": "A new PR adds this to `chromium_src/.../web_app_launch_process.cc`:\n\n```cpp\n#define NavigateWebAppUsingParams(nav_params) \\\n  NavigateWebAppInContainerUsingParams(&profile_.get(), *params_, nav_params)\n#include <chrome/browser/ui/web_applications/web_app_launch_process.cc>\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Add an `#undef NavigateWebAppUsingParams` right after the include",
+      "Reorder includes so the macro can't hit unrelated declarations",
+      "Rename the upstream function to `NavigateWebAppUsingParams_ChromiumImpl` and wrap it",
+      "Replace the macro with a plaster rewrite that redirects only the intended call"
+    ],
+    "answer": 3,
+    "explain": "New macros that edit upstream code are banned — a `#define` silently rewrites every occurrence in the TU. A plaster rewrite changes only the intended call, shows up in the generated patch, and `count` fails loudly if the premise breaks."
+  },
+  {
+    "rule": "PLSTR-003",
+    "prompt": "You need `DownloadDisplayController::UpdateToolbarButtonState` to be overridable by a Brave subclass. In new code, what's the right approach?",
+    "choices": [
+      "A plaster `make_virtual` substitution (with `drop_final`/`add_friend` if needed)",
+      "`#define UpdateToolbarButtonState virtual UpdateToolbarButtonState` in chromium_src",
+      "Copy the whole header into chromium_src with the method made virtual",
+      "Rename the upstream method to `UpdateToolbarButtonState_ChromiumImpl`"
+    ],
+    "answer": 0,
+    "explain": "Even decorating macros like `#define SomeMethod virtual SomeMethod` are banned in new code. Use the `make_virtual` rewriter (preferring AST rewriters over regex where one fits)."
+  },
+  {
+    "rule": "PLSTR-004",
+    "prompt": "A plaster must append `public_deps += brave_web_applications_deps` to the `web_applications` source set. Which `re_pattern` is better?",
+    "choices": [
+      "`'(source_set\\(\"web_applications\"\\).*?\\bpublic_deps\\s*=\\s*\\[.*?\\])'` + `DOTALL`",
+      "`'(public_deps = \\[ \"//chrome/browser:browser_public_dependencies\" \\])'` as a literal",
+      "`'public_deps'` with no further context, so upstream reformatting can't break it",
+      "A `pattern` containing the full, current text of the `source_set(\"web_applications\")` block"
+    ],
+    "answer": 0,
+    "explain": "Anchor on the thing being changed (the target) and let `.*?` absorb incidental content. Pinning the exact contents of the deps list breaks on any upstream addition for reasons unrelated to the rewrite."
+  },
+  {
+    "rule": "PLSTR-005",
+    "prompt": "A plaster replaces a single literal statement:\n\n```yaml\nre_pattern: '\\n([^\\S\\n]*)return NavigateWebAppUsingParams\\(nav_params\\);'\nreplace: |-\n  \\n\\1return BraveNavigateWebAppUsingParams(&profile_.get(), *params_, nav_params);\n```\n\nWhat's the reviewer's best suggestion?",
+    "choices": [
+      "Keep it; capturing indentation with `([^\\S\\n]*)` is required for a correct patch",
+      "Add `re_flags: [MULTILINE]` so `^` can replace the leading `\\n` in the regex",
+      "Use a plain `pattern:` with the literal `return` statement — it's its own anchor",
+      "Move the replacement into a chromium_src `#define` of `NavigateWebAppUsingParams`"
+    ],
+    "answer": 2,
+    "explain": "If the anchor is a single literal statement, use plain `pattern` — it escapes the string for you. Don't reach for `re_pattern` with escaped punctuation and capture groups just to reproduce whitespace."
+  }
+]

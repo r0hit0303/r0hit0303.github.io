@@ -1,0 +1,110 @@
+[
+  {
+    "rule": "PATCH-001",
+    "prompt": "You're reviewing a hand-written patch to an upstream Chromium file:\n\n```diff\n void Foo::Init() {\n+  // Brave: register our extra handlers.\n+  BRAVE_FOO_INIT\n+\n   RegisterHandlers();\n-  StartObserving();  \n+  StartObserving();\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Nothing — a `// Brave:` comment helps resolve conflicts during rebases",
+      "Keep only `BRAVE_FOO_INIT`; drop the comment, blank line and whitespace fix",
+      "Keep the comment but revert the trailing-whitespace fix to shrink the hunk",
+      "Move the comment above the function signature so it doesn't touch the body"
+    ],
+    "answer": 1,
+    "explain": "Patches contain only the minimal functional change — no comments, blank lines or whitespace fixes. Every extra line is more to review and more to conflict on Chromium upgrades."
+  },
+  {
+    "rule": "PATCH-004",
+    "prompt": "You need to inject about 8 lines of Brave logic into the middle of an upstream `.cc` function. Which approach follows the patch guidelines?",
+    "choices": [
+      "A multiline patch inserting the 8 lines, wrapped in `// Brave start` / `// Brave end` markers",
+      "Several small 2–3 line patches spread through the function so each hunk rebases easily",
+      "Copy the upstream function's body into the patch as a replacement block",
+      "Move the logic into a macro or `chromium_src` override and patch in one line"
+    ],
+    "answer": 3,
+    "explain": "Never create multiline hand-written patches. Move the logic into a `#define` or `chromium_src` override so the patch itself stays one line."
+  },
+  {
+    "rule": "PATCH-005",
+    "prompt": "A patch adds three Brave entries to a list/block in an upstream file, and more Brave entries are expected later. How should the patch be written?",
+    "choices": [
+      "Patch in an `include` of a Brave-owned file that holds the entries",
+      "Add all three entries inline and update the patch whenever new ones are needed",
+      "Create one patch file per entry so each can be dropped independently",
+      "Replace the upstream list entirely with a Brave-maintained copy of it"
+    ],
+    "answer": 0,
+    "explain": "When a patch adds to a list or block, use an `include` so future items are added in brave-core without touching the patch again."
+  },
+  {
+    "rule": "PATCH-006",
+    "prompt": "You must make `PermissionControllerImpl::GetPermissionStatus` return early for a Brave-specific permission. Which patch line is preferred?",
+    "choices": [
+      "`+  if (permission == AUTOPLAY) return true;` as a single inline line",
+      "`+  // Brave: AUTOPLAY early return` followed by the inline `if` check",
+      "`+BRAVE_PERMISSION_CONTROLLER_IMPL_GET_PERMISSION_STATUS`, defined in brave-core",
+      "`+#define BRAVE_HOOK if (permission == AUTOPLAY) return true;` written inside the patch"
+    ],
+    "answer": 2,
+    "explain": "Patches should reference a `#define` whose body lives in brave-core, so behavior can change without editing the patch. Name it `BRAVE_ALL_CAPS_ORIGINAL_METHOD_NAME`."
+  },
+  {
+    "rule": "PATCH-007",
+    "prompt": "An upstream Android layout XML contains a `<LinearLayout>` block that Brave doesn't want. How should the patch get rid of it?",
+    "choices": [
+      "Delete the element's lines with `-` lines so the patch clearly shows what's removed",
+      "Wrap the block in an XML comment: add a `<!--` line before and `-->` after",
+      "Add `android:visibility=\"gone\"` to the opening tag so it never renders",
+      "Delete it and re-add an empty `<LinearLayout/>` placeholder for ID lookups"
+    ],
+    "answer": 1,
+    "explain": "In XML patches, comment out with `<!-- -->` instead of deleting lines. That keeps the patch addition-only and minimizes the diff."
+  },
+  {
+    "rule": "PATCH-007",
+    "prompt": "Your one-line patch to an upstream `.cc` file comes out at 104 characters. A reviewer points out the 80-column limit. Best response?",
+    "choices": [
+      "Split it over two lines, since patched files must pass the 80-column lint",
+      "Shorten it by renaming the upstream variables it references to fit 80 columns",
+      "Run `git cl format` on the upstream file so the line wraps automatically",
+      "Keep it on one line; lint doesn't run on patches, and one-liners rebase better"
+    ],
+    "answer": 3,
+    "explain": "Keep patches to one line even if that breaks the line-length limit, because lint doesn't run on patched files. Also put additions on separate lines and match existing code exactly so the patch auto-resolves."
+  },
+  {
+    "rule": "PATCH-008",
+    "prompt": "Brave needs to drop a dependency from an upstream target:\n\n```gn\n  public_deps += [ \":chrome_framework_widevine_signature\" ]\n```\n\nWhich patch is preferred?",
+    "choices": [
+      "Add a line: `public_deps -= [ \":chrome_framework_widevine_signature\" ]`",
+      "Delete the original `public_deps +=` line with a `-` line in the patch",
+      "Comment out the original line with `#` so it's easy to restore later",
+      "Change the original line to `public_deps += []` to keep line numbers stable"
+    ],
+    "answer": 0,
+    "explain": "Use `-=` on a separate line to remove items from GN lists. The patch then only adds a line and never modifies the original one."
+  },
+  {
+    "rule": "PATCH-009",
+    "prompt": "A patch to an upstream `BUILD.gn` target needs to add `//brave/browser/ui/views/location_bar` as a dep, and more Brave deps will likely follow. Which patch line is best?",
+    "choices": [
+      "`+  deps += [ \"//brave/browser/ui/views/location_bar\" ]`",
+      "`+  deps += [ ... ]` listing every Brave dep you can foresee now",
+      "`+  deps += brave_browser_window_deps`, defined in Brave code",
+      "`+  public_deps = [ \"//brave/browser/ui\" ]`, replacing the upstream deps"
+    ],
+    "answer": 2,
+    "explain": "Define a variable in Brave code and patch only the reference to it. Deps can then be added or removed without touching the patch."
+  },
+  {
+    "rule": "PATCH-010",
+    "prompt": "To change how upstream's `java_cpp_enum.py` generates a Java enum, a teammate adds a patch to the Python script. Your review?",
+    "choices": [
+      "Fine — Python scripts aren't compiled, so the patch is low risk",
+      "Don't patch build scripts; patch the enum's header instead",
+      "Fine, as long as the Python patch is a single, macro-style line",
+      "Guard the patched code with an environment-variable check so it only runs for Brave"
+    ],
+    "answer": 1,
+    "explain": "Patching Python build scripts prevents correct incremental rebuilds and breaks remote `siso` actions. Prefer a `chromium_src` override or a `#define`. For enums processed by upstream scripts, a multiline header patch is acceptable."
+  }
+]

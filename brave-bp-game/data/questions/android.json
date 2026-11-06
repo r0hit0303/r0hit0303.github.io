@@ -1,0 +1,674 @@
+[
+  {
+    "rule": "AND-001",
+    "prompt": "You're reviewing this change in a `ChromeActivity` subclass. The method runs from a delayed callback scheduled during startup:\n```java\nprivate void maybeRequestDefaultBrowser() {\n    showDefaultBrowserDialog();\n}\n```\nWhat should the reviewer ask for?",
+    "choices": [
+      "Add `if (isActivityFinishingOrDestroyed()) return;` before showing the dialog",
+      "Wrap `showDefaultBrowserDialog()` in a try/catch for `WindowManager.BadTokenException`",
+      "Post the dialog with `PostTask.postTask()` so it runs on the UI thread",
+      "Nothing — dialogs are safe to show from any callback once `onCreate()` has run"
+    ],
+    "answer": 0,
+    "explain": "Activities can be destroyed between when a callback is scheduled and when it runs. Guard UI work in async callbacks, animation listeners, and lambdas with `isActivityFinishingOrDestroyed()`."
+  },
+  {
+    "rule": "AND-002",
+    "prompt": "A Fragment receives a Mojo response and updates its views:\n```java\nvoid onServiceResult(Result result) {\n    updateUI(result);\n}\n```\nWhich guard follows the Brave Android standard?",
+    "choices": [
+      "`if (getView() == null) return;` is sufficient, since a detached fragment has no view",
+      "`if (!isAdded() || isDetached()) return;`, then bail if `getActivity()` is null/finishing",
+      "`if (result == null) return;` — fragment state doesn't matter for Mojo responses on the UI thread",
+      "Check `isResumed()` and queue the update until `onResume()` otherwise"
+    ],
+    "answer": 1,
+    "explain": "Fragments can be detached or their Activity destroyed while async work runs. Verify `isAdded()`/`!isDetached()` and that the host Activity is non-null and not finishing before touching UI."
+  },
+  {
+    "rule": "AND-003",
+    "prompt": "A preference triggers an async network call:\n```java\npreference.setOnPreferenceClickListener(pref -> {\n    accountService.resendConfirmationEmail(callback);\n    return true;\n});\n```\nWhat's the recommended fix?",
+    "choices": [
+      "Debounce clicks with a 500 ms timer stored in a static field on the fragment",
+      "Return `false` from the listener so the preference ignores subsequent clicks until done",
+      "Call `preference.setEnabled(false)` before the request; re-enable it in the callback",
+      "Show a toast telling the user the email is being sent"
+    ],
+    "answer": 2,
+    "explain": "Disable interactive UI while an async operation is in flight to prevent double-clicks, then re-enable it when the callback completes."
+  },
+  {
+    "rule": "AND-004",
+    "prompt": "```java\nprivate void showSplash() {\n    if (mSplashContainer != null) {\n        mSplashContainer.setVisibility(View.VISIBLE);\n    }\n}\nprivate void hideSplash() {\n    mSplashContainer.setVisibility(View.GONE);\n}\n```\nWhat should a reviewer flag?",
+    "choices": [
+      "The null check in `showSplash()` is redundant and should be removed for consistency with `hideSplash()`",
+      "`mSplashContainer` should be made `static` so it is never null",
+      "Nothing — `View.GONE` on a null view is a no-op",
+      "Add the same null check to `hideSplash()`; the field is treated as nullable elsewhere"
+    ],
+    "answer": 3,
+    "explain": "If a member field is null-checked in some code paths, check it in all paths that use it. Inconsistent checks suggest some paths can crash."
+  },
+  {
+    "rule": "AND-005",
+    "prompt": "A JNI bridge forwards calls to a keyed service:\n```cpp\nvoid NTPBackgroundImagesBridge::GetCurrentWallpaperForDisplay() {\n  view_counter_service_->GetCurrentWallpaperForDisplay();\n}\n```\nUpstream logic \"should\" never call this in incognito. What's the best review comment?",
+    "choices": [
+      "Add an explicit `if (!view_counter_service_) return;`; it may be null in incognito",
+      "Leave it; upstream guarantees the call never happens in incognito",
+      "Replace it with `CHECK(view_counter_service_)` so a null service in incognito crashes loudly",
+      "Create the service on demand for the incognito profile inside the bridge"
+    ],
+    "answer": 0,
+    "explain": "Services reached through bridges or native code may be null for incognito profiles. Add explicit null checks at the point of use, even if upstream theoretically handles it."
+  },
+  {
+    "rule": "AND-006",
+    "prompt": "You need a thread-safe singleton for `BraveAccountServiceFactory`. Which implementation follows the standard?",
+    "choices": [
+      "A `static final Object sLock` with a `synchronized (sLock)` null-check in `getInstance()`",
+      "A private static `LazyHolder` nested class with a `static final INSTANCE` field",
+      "A `volatile` static field with double-checked locking",
+      "Initialize the instance in `Application.onCreate()` and expose it via a public static field"
+    ],
+    "answer": 1,
+    "explain": "Use the LazyHolder idiom for singleton factories instead of explicit `synchronized` lock blocks. It's compact and thread-safe thanks to Java's class-loading guarantees."
+  },
+  {
+    "rule": "AND-007",
+    "prompt": "A custom `Preference` stores `mTextColor = resolveThemeColor(context, R.attr.textColor)` in its constructor. Users report the title stays dark after switching to dark theme. What's the fix?",
+    "choices": [
+      "Cache the color in a static field shared by all instances of the preference",
+      "Hardcode the color with `Color.parseColor()` in the constructor",
+      "Resolve the theme color in `onBindViewHolder()` and apply it there",
+      "Recreate the whole settings Activity whenever the theme changes"
+    ],
+    "answer": 2,
+    "explain": "Resolve theme colors at bind time (`onBindViewHolder` or equivalent), not during construction, so they update correctly on light/dark switches without recreating the view."
+  },
+  {
+    "rule": "AND-008",
+    "prompt": "A preference in `brave_main_preferences.xml` is removed in Java when a feature flag is off. QA notices it briefly flashes on screen before disappearing. What should you add to the XML?",
+    "choices": [
+      "`android:enabled=\"false\"` on the preference",
+      "`android:visibility=\"gone\"` on the preference's layout",
+      "`app:singleLineTitle=\"false\"` on the preference",
+      "`app:isPreferenceVisible=\"false\"` on the preference"
+    ],
+    "answer": 3,
+    "explain": "For preferences that are hidden or removed programmatically based on a flag, set `app:isPreferenceVisible=\"false\"` in XML to avoid the brief visual flash."
+  },
+  {
+    "rule": "AND-009",
+    "prompt": "```java\nif (contractAddress == null || contractAddress.length() < MIN_LENGTH) {\n    Log.e(TAG, \"Invalid contract address\");\n    return \"\";\n}\n```\nWhat improvement does the Brave Android guide recommend?",
+    "choices": [
+      "Add an `assert` with the same condition above the guard, keeping the fallback",
+      "Replace the guard with `throw new IllegalArgumentException()` to fail fast on bad input",
+      "Upgrade `Log.e` to `Log.wtf` and remove the early return",
+      "Remove the guard; invalid addresses should be impossible here"
+    ],
+    "answer": 0,
+    "explain": "Pair log-only defensive checks with `assert`: asserts surface problems immediately in debug builds, while the graceful handling still protects release builds."
+  },
+  {
+    "rule": "AND-010",
+    "prompt": "`hasPipPermission()` queries `PackageManager` and `AppOpsManager`, and it's being called from a frequently-hit path. A teammate suggests caching it in a member during `onCreate()`. What's the right consideration?",
+    "choices": [
+      "Always cache system service results; they never change during an Activity's lifetime",
+      "Cache expensive lookups, but not values that can change unnotified, like PiP availability",
+      "Never cache system service results; Android already caches `PackageManager` lookups internally",
+      "Move the lookup to a background thread instead of caching it"
+    ],
+    "answer": 1,
+    "explain": "Compute expensive system-service lookups once and store them instead of repeating them in a hot path. The exception is values that can change without notification in multi-window or config-change scenarios, such as PiP availability."
+  },
+  {
+    "rule": "AND-011",
+    "prompt": "You're adding wallet address validation to an Android screen. iOS and desktop accept the same input. What should you do first?",
+    "choices": [
+      "Write a Java regex validator, since Android needs to validate before calling native",
+      "Copy the iOS Swift validation logic into Kotlin for parity",
+      "Check whether unified validation already exists on the core/native side and use it",
+      "Skip validation on Android and rely on server errors"
+    ],
+    "answer": 2,
+    "explain": "Before writing validation in Android/Java, check for unified core/native-side validation. Preferring core-side logic avoids inconsistencies across Android, iOS, and desktop."
+  },
+  {
+    "rule": "AND-012",
+    "prompt": "A Robolectric test crashes because the code under test calls `ChromeFeatureList.isEnabled(BraveFeatureList.SOME_FEATURE)`. What's the recommended pattern in the production code?",
+    "choices": [
+      "Wrap the call in `try { ... } catch (UnsatisfiedLinkError e) {}`",
+      "Convert the test to an instrumentation test; Robolectric can't test this code",
+      "Load the native library in the test with `System.loadLibrary()`",
+      "Guard the call with `if (FeatureList.isNativeInitialized())`"
+    ],
+    "answer": 3,
+    "explain": "Robolectric has no native/JNI. Use conditional checks like `FeatureList.isNativeInitialized()` to handle the test environment gracefully (see `BraveDynamicColors.java`)."
+  },
+  {
+    "rule": "AND-013",
+    "prompt": "Your bytecode class adapter for an upstream Java class keeps failing. The class has two constructors. What's the accepted approach?",
+    "choices": [
+      "Use a direct `.java.patch` file for that class instead",
+      "Add a third constructor so the adapter can choose a unique one",
+      "Copy the whole upstream class into `brave/` and redirect all imports",
+      "Disable the adapter and use reflection to change the behavior at runtime"
+    ],
+    "answer": 0,
+    "explain": "Bytecode (class adapter) patching fails when a class has two constructors; use a direct `.java.patch` instead. Likewise, use direct `BUILD.gn` patches when circular deps prevent using `java_sources.gni`."
+  },
+  {
+    "rule": "AND-014",
+    "prompt": "Presubmit flags `ProfileManager.getLastUsedRegularProfile()` in `QuickActionSearchAndBookmarkWidgetProvider`. As the reviewer, what do you say?",
+    "choices": [
+      "Block the PR until the profile comes from the hosting Activity's `getProfile()` instead",
+      "Accept it: widget providers have no Activity or WebContents context, like upstream widgets",
+      "Replace it with `ProfileManager.getOriginalProfile()`, which presubmit allows in widget code",
+      "Pass the profile into the widget through an Intent extra"
+    ],
+    "answer": 1,
+    "explain": "Never flag `getLastUsedRegularProfile()` as a violation in Android widget providers, where no Activity/WebContents context exists. Upstream Chromium does the same in its widgets."
+  },
+  {
+    "rule": "AND-015",
+    "prompt": "A PR adds this, but nothing implements or calls it:\n```java\npublic interface OnAnimationCompleteListener {\n    void onAnimationComplete();\n}\n```\nThe author says \"it might be useful later.\" Best response?",
+    "choices": [
+      "Keep it but mark it `@Deprecated` so nobody starts depending on it yet",
+      "Keep it and add a TODO linking to the future issue that will use it",
+      "Remove it before merging; unused interfaces shouldn't be left in the codebase",
+      "Make it package-private so it can't leak into the public API until someone needs it"
+    ],
+    "answer": 2,
+    "explain": "Don't leave unused interfaces, listener patterns, or helper methods behind. If they were scaffolded during development and never used, remove them before merging."
+  },
+  {
+    "rule": "AND-016",
+    "prompt": "```xml\n<FrameLayout\n    android:id=\"@+id/splash_animation_container\"\n    android:clickable=\"true\"\n    android:focusable=\"true\"\n    android:layout_width=\"match_parent\"\n    android:layout_height=\"wrap_content\" />\n```\nThe container only hosts a display-only Lottie animation. What should the reviewer say?",
+    "choices": [
+      "Also add `android:contentDescription` so TalkBack can announce the animation",
+      "Keep `focusable` but remove `clickable`, so keyboard users can reach it",
+      "Fine as-is — it stops touches from passing through to the views below the splash",
+      "Drop `clickable`/`focusable`; they hurt accessibility and touch handling here"
+    ],
+    "answer": 3,
+    "explain": "Don't set `android:clickable` or `android:focusable` on purely decorative or display-only views like animation containers; these attributes change accessibility and touch event handling."
+  },
+  {
+    "rule": "AND-017",
+    "prompt": "Android and iOS both ship the exact same onboarding Lottie JSON file, each in its own directory. A designer updates the animation. What does the standard recommend?",
+    "choices": [
+      "Keep a single shared copy that both platforms reference",
+      "Keep per-platform copies so each team can evolve them independently",
+      "Generate the Android copy from the iOS one with a build step",
+      "Convert the Android copy to an `AnimatedVectorDrawable`"
+    ],
+    "answer": 0,
+    "explain": "When Android and iOS use identical assets, reference a single shared copy instead of maintaining duplicates, so changes only need to be made once."
+  },
+  {
+    "rule": "AND-019",
+    "prompt": "`brave_java_sources.gni` now lists dozens of `crypto_wallet` Java files mixed with everything else. What's the suggested improvement?",
+    "choices": [
+      "Sort the list alphabetically so the wallet files are grouped",
+      "Consider moving the feature's sources into a separate build target",
+      "Split `brave_java_sources.gni` into two `.gni` files of roughly equal size",
+      "Nothing — all Brave Java sources should live in one list"
+    ],
+    "answer": 1,
+    "explain": "When feature-specific Java sources accumulate in `brave_java_sources.gni`, consider a separate build target for better build isolation and dependency tracking."
+  },
+  {
+    "rule": "AND-021",
+    "prompt": "Which version of `handleState()` follows the Brave Android style?",
+    "choices": [
+      "`if (!isFinished) { if (hasData) { /* main logic */ } }`",
+      "`if (!isFinished && hasData) { /* main logic */ } else { return; }`",
+      "`if (isFinished) return;` and `if (!hasData) return;`, then the main logic",
+      "Move the main logic to a helper and call it from inside both nested `if` blocks"
+    ],
+    "answer": 2,
+    "explain": "When a condition decides whether the rest of a method runs, return early instead of nesting `if` blocks; it reduces nesting depth and improves readability."
+  },
+  {
+    "rule": "AND-022",
+    "prompt": "A PR modifies a class adapter in `build/android/bytecode/java/org/brave/bytecode/`. What else should it include?",
+    "choices": [
+      "A Robolectric unit test that instantiates the patched class and calls its methods",
+      "A note in the PR description; bytecode adapters are verified at build time",
+      "A ProGuard keep rule for every method the adapter touches",
+      "`BytecodeTest.java` entries in `testClassesExist` and `testMethodsExist`"
+    ],
+    "answer": 3,
+    "explain": "Bytecode adapter changes need a matching bytecode test in `BytecodeTest.java` (class existence and method existence with return types), so upstream refactors fail at test time, not silently at runtime."
+  },
+  {
+    "rule": "AND-023",
+    "prompt": "A new instrumentation test needs a class kept from shrinking. The author adds the `-keep` rule to `android/java/proguard.flags`. What's the right feedback?",
+    "choices": [
+      "Move it to `apk_for_test.flags`; `proguard.flags` is for runtime reflection only",
+      "Correct — all keep rules belong in `proguard.flags`, test or production",
+      "Add it to both `.flags` files to be safe, since test APKs merge them anyway",
+      "Use `@Keep` on the class instead, which R8 only honors in test builds"
+    ],
+    "answer": 0,
+    "explain": "Keep rules for runtime reflection go in `proguard.flags`. Test-only rules go in `apk_for_test.flags`; putting them in `proguard.flags` grows the production APK by preventing shrinking."
+  },
+  {
+    "rule": "AND-024",
+    "prompt": "Bytecode rewriting redirects `new UpstreamClass()` to `new BraveClass()`.\n```java\nclass BraveClass extends UpstreamClass {\n    private static final List<Entry> sEntries = List.of(new Entry());\n    BraveClass() {\n        Registry.register(sEntries);\n    }\n}\n```\nWhat's the risk, and the fix?",
+    "choices": [
+      "`List.of` is immutable, so `register()` will throw on insert; use `new ArrayList<>()`",
+      "The constructor may run before `sEntries` is set; register in a `static {}` block after it",
+      "`sEntries` should be `volatile` so other threads see it initialized",
+      "There's no risk; Java always initializes a subclass's statics before its constructor runs"
+    ],
+    "answer": 1,
+    "explain": "A redirected allocation inside `UpstreamClass` static init can re-enter `BraveClass()` before `BraveClass`'s statics are initialized. Keep redirected constructors free of reads of their own static state; use a static block placed after the fields it uses."
+  },
+  {
+    "rule": "AND-025",
+    "prompt": "You change a private method to package-private only so a test in the same package can call it. Which annotation should you add?",
+    "choices": [
+      "`@VisibleForTesting` with no arguments, since package-private is already the default",
+      "`@SuppressWarnings(\"unused\")`",
+      "`@VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)`",
+      "No annotation; a `// for testing` comment is enough"
+    ],
+    "answer": 2,
+    "explain": "Annotate members made package-private solely for tests with `@VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)`. It documents intent and lets IDEs flag misuse from non-test code."
+  },
+  {
+    "rule": "AND-026",
+    "prompt": "You need to add one Brave button to an upstream toolbar. A teammate proposes copying the whole upstream layout XML into Brave and adding the button there. Best response?",
+    "choices": [
+      "Good idea — XML replacement is the cleanest, most readable way to customize upstream UI",
+      "Patch the upstream XML file in place with a `.patch` instead, which keeps the diff minimal",
+      "Use reflection to inject the button into the toolbar after layout inflation",
+      "Add it programmatically via `addView`; replace the XML only if that's equally invasive"
+    ],
+    "answer": 3,
+    "explain": "Replacing full upstream XML layouts creates maintenance burden during Chromium upgrades. Prefer programmatic `addView`, unless that requires extending final classes or is equally invasive; then document the trade-off."
+  },
+  {
+    "rule": "AND-027",
+    "prompt": "You're adding a brand-new Brave-only drawable, `ic_brave_vpn_badge.xml`. Where should it go?",
+    "choices": [
+      "In a dedicated `brave-res` folder",
+      "In the upstream `chrome/android/java/res/drawable/` directory next to similar icons",
+      "In whichever upstream folder the consuming layout lives in",
+      "In `res/raw/` so it isn't merged with upstream resources"
+    ],
+    "answer": 0,
+    "explain": "Brave-specific resources go in `brave-res`. Upstream resource directories are only for intentionally overriding an existing upstream resource; otherwise it's unclear whether a file is an addition or an override."
+  },
+  {
+    "rule": "AND-028",
+    "prompt": "A PR removes an Android feature by deleting its Java classes and its settings XML. What should the reviewer check before approving?",
+    "choices": [
+      "That the deleted classes were marked `@Deprecated` for one release before removal",
+      "That related bytecode adapters/tests, ProGuard rules, JNI, flags, and GN refs are removed",
+      "Only that the build still compiles; any leftover references are harmless since R8 prunes them",
+      "That the strings are kept in the `.grd` in case the feature returns later"
+    ],
+    "answer": 1,
+    "explain": "When removing a feature, audit all artifacts: bytecode adapters, ProGuard rules, bytecode test entries, Java sources, resources, JNI bindings, feature flags, and build references."
+  },
+  {
+    "rule": "AND-029",
+    "prompt": "```java\nif (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {\n    requestPermissions(perms, REQUEST_CODE);\n}\n```\nBrave's minimum SDK is above API 23. What's the right review comment?",
+    "choices": [
+      "Keep it for safety in case the min SDK is ever lowered again",
+      "Add an `else` branch that logs a warning for unsupported devices",
+      "Remove the check; it's dead code given the min SDK",
+      "Replace it with `BuildInfo.isAtLeastM()` for readability"
+    ],
+    "answer": 2,
+    "explain": "Remove Android version checks for API levels below the app's minimum SDK (e.g. Lollipop/Marshmallow); they're dead code."
+  },
+  {
+    "rule": "AND-031",
+    "prompt": "You're writing a direct (non-`chromium_src`) patch to an upstream Java file. Which approach minimizes conflicts on Chromium upgrades?",
+    "choices": [
+      "Edit the existing upstream line in place so the diff stays as small as possible",
+      "Reformat the surrounding block so the patch has clear anchors",
+      "Comment out the upstream line and add your version below it",
+      "Add entirely new lines rather than editing existing upstream lines"
+    ],
+    "answer": 3,
+    "explain": "In direct patches, prefer adding new lines over modifying existing ones. New lines have no upstream anchor that might change, reducing conflicts during upgrades."
+  },
+  {
+    "rule": "AND-032",
+    "prompt": "You need to change behavior inside an anonymous inner class in upstream Chromium Java code, and the Brave override system can't handle it. What's acceptable?",
+    "choices": [
+      "Use a `.patch`, explain why in the PR, and link the override-support tracking issue",
+      "Rewrite the whole upstream class as a Brave subclass and redirect it via bytecode",
+      "Use reflection at runtime to swap out the anonymous class instance after construction",
+      "Drop the change; anonymous inner classes can't be customized"
+    ],
+    "answer": 0,
+    "explain": "When the override system can't handle anonymous inner classes, a `.patch` file is the accepted fallback; document the reason and link to the tracking issue."
+  },
+  {
+    "rule": "AND-033",
+    "prompt": "A PR tweaks a color in `brave_colors.xml` to fix the contrast on one new screen. What should the reviewer ask?",
+    "choices": [
+      "Why not hardcode the color in that one layout instead?",
+      "Were other UIs using this resource checked for impact?",
+      "Can the color be moved into upstream's `colors.xml` instead?",
+      "Nothing — color tweaks are low risk"
+    ],
+    "answer": 1,
+    "explain": "Shared resource values (colors, dimensions, styles) can affect many screens. Cross-check every usage before modifying them."
+  },
+  {
+    "rule": "AND-034",
+    "prompt": "A button looks wrong in dark mode. Which fix aligns with the standard?",
+    "choices": [
+      "Patch the upstream Java class to call `setTextColor()` based on the current night-mode flag",
+      "Override `onConfigurationChanged()` and recolor the button manually",
+      "Use baseline XML color resources for non-dynamic states; test with Dynamic Colors on/off",
+      "Disable Dynamic Colors for this screen so the color is predictable"
+    ],
+    "answer": 2,
+    "explain": "For theming issues, follow upstream: baseline colors (XML resources) for non-dynamic states rather than patching Java to set colors. Always verify with the Dynamic Colors flag enabled and disabled."
+  },
+  {
+    "rule": "AND-035",
+    "prompt": "You need a new Android string for a Brave feature. Where should it go?",
+    "choices": [
+      "In upstream `chrome_strings.grd`, next to related strings",
+      "In the upstream `strings.xml` of the module that uses it, for locality",
+      "Hardcoded in Java until translations are ready",
+      "In `android_brave_strings.grd` or another Brave-owned resource"
+    ],
+    "answer": 3,
+    "explain": "Never modify upstream string resource files like `chrome_strings.grd`. Brave strings go in `android_brave_strings.grd` or a Brave-owned file to avoid patch conflicts."
+  },
+  {
+    "rule": "AND-036",
+    "prompt": "The upstream method is annotated `@NullUnmarked`. Your Brave override looks like this:\n```java\n@Override\npublic void onResult(Profile profile) { ... }\n```\nWhat should you change?",
+    "choices": [
+      "Add `@NullUnmarked` to the override to match upstream",
+      "Add `@NonNull` to `profile` to be stricter than upstream",
+      "Add `@SuppressWarnings(\"NullAway\")` instead; it's equivalent",
+      "Nothing — overrides inherit annotations automatically"
+    ],
+    "answer": 0,
+    "explain": "Match upstream nullability annotations (`@NullUnmarked`, `@Nullable`, `@NonNull`) on overrides. Mismatches cause NullAway build failures."
+  },
+  {
+    "rule": "AND-037",
+    "prompt": "Which Log TAG declaration in `BraveVpnProfileController` follows the guideline?",
+    "choices": [
+      "`private static final String TAG = \"BraveVpnProfileController\";`",
+      "`private static final String TAG = \"BraveVPN\";`",
+      "`private static final String TAG = BraveVpnProfileController.class.getSimpleName();`",
+      "`private static final String TAG = \"org.chromium.chrome.browser.vpn.BraveVpnProfileController\";`"
+    ],
+    "answer": 1,
+    "explain": "Log TAGs should be short and descriptive, not a repeat of the full class name when that adds no value."
+  },
+  {
+    "rule": "AND-038",
+    "prompt": "Which XML follows the Brave Android layout guideline?",
+    "choices": [
+      "`<View android:paddingStart=\"16dp\" android:paddingEnd=\"16dp\" />`",
+      "`<View android:paddingLeft=\"16dp\" android:paddingRight=\"16dp\" />`",
+      "`<View android:paddingHorizontal=\"16dp\" />`",
+      "`<View android:padding=\"16dp\" android:paddingTop=\"0dp\" android:paddingBottom=\"0dp\" />`"
+    ],
+    "answer": 2,
+    "explain": "Use shorthand attributes (`paddingHorizontal`, `marginHorizontal`, `paddingVertical`, `marginVertical`) instead of setting start/end or top/bottom separately."
+  },
+  {
+    "rule": "AND-039",
+    "prompt": "With NullAway in JSpecify mode, which field declaration is correct?",
+    "choices": [
+      "`@Nullable` on its own line, then `private String mValue;` on the next",
+      "`@Nullable private String mValue;`",
+      "`private String @Nullable mValue;`",
+      "`private @Nullable String mValue;`"
+    ],
+    "answer": 3,
+    "explain": "In JSpecify mode `@Nullable` is `TYPE_USE`, so it must go immediately before the type (e.g. `private @Nullable String`, or `Outer.@Nullable Inner`)."
+  },
+  {
+    "rule": "AND-039",
+    "prompt": "With JSpecify-style `@Nullable`, which declaration is a **non-null list of nullable strings**?",
+    "choices": [
+      "`List<@Nullable String> mList;`",
+      "`@Nullable List<String> mList;`",
+      "`List<String> @Nullable mList;`",
+      "`@Nullable List<@Nullable String> mList;`"
+    ],
+    "answer": 0,
+    "explain": "Position matters: the annotation applies to the type it precedes. `List<@Nullable String>` is a non-null list whose elements may be null."
+  },
+  {
+    "rule": "AND-040",
+    "prompt": "```java\nprivate @Nullable String mNullableString;\n\nprivate void usesNullableString() {\n    if (mNullableString.isEmpty()) { ... }  // NullAway warns\n}\n```\nEvery caller of this private method checks the field is non-null first. What's the idiomatic fix?",
+    "choices": [
+      "Annotate the method with `@Initializer`",
+      "Annotate the method with `@RequiresNonNull(\"mNullableString\")`",
+      "Change the field to non-null and suppress the constructor warning",
+      "Copy the field to a local `boolean isSet` and check that"
+    ],
+    "answer": 1,
+    "explain": "NullAway analyzes per method, so use `@RequiresNonNull`, `@EnsuresNonNull`, `@EnsuresNonNullIf`, and `@Contract` to carry nullness conditions across method boundaries. `@RequiresNonNull` only makes sense on private methods."
+  },
+  {
+    "rule": "AND-041",
+    "prompt": "A field is null until `doThing()` first sets it, and is never set back to null. NullAway warns when it's used later inside a `PostTask` lambda. Which annotation fits best?",
+    "choices": [
+      "`@Nullable`, plus `assumeNonNull()` inside every lambda",
+      "`@NullUnmarked` on the class",
+      "`@MonotonicNonNull`",
+      "`@Initializer` on `doThing()`"
+    ],
+    "answer": 2,
+    "explain": "For fields that start null but are never reset to null after initialization, use `@MonotonicNonNull`. NullAway then trusts the field stays non-null after assignment, even in lambdas."
+  },
+  {
+    "rule": "AND-042",
+    "prompt": "`obj.getNullableString()` returns null only in a broken state, and a null would cause worse problems later if it slipped through. You want a crash even in production. Which do you use?",
+    "choices": [
+      "`assumeNonNull(ret)`",
+      "`assert ret != null : \"broken\";`",
+      "`assertNonNull(ret)`",
+      "`Objects.requireNonNull(ret)`"
+    ],
+    "answer": 3,
+    "explain": "`Objects.requireNonNull()` crashes in production; use it when null would cause worse problems later. `assumeNonNull`, `assertNonNull`, and `assert` don't crash in prod (asserts only fire on Canary as dump-without-crashing)."
+  },
+  {
+    "rule": "AND-042",
+    "prompt": "You need a non-null **expression** to assign a field from a map lookup, with assert semantics. Which is idiomatic?",
+    "choices": [
+      "`mNonNullField = assertNonNull(dict.get(\"key\"));` with `import static`",
+      "`mNonNullField = NullUtil.assertNonNull(dict.get(\"key\"));` without a static import",
+      "`assert dict.get(\"key\") != null; mNonNullField = dict.get(\"key\");`",
+      "`mNonNullField = (String) dict.get(\"key\");`"
+    ],
+    "answer": 0,
+    "explain": "Use `assertNonNull()` when you need an assert as an expression, and always use `import static` for `assumeNonNull`/`assertNonNull`."
+  },
+  {
+    "rule": "AND-043",
+    "prompt": "A class has a `destroy()` method that nulls out `mService`, which is otherwise always non-null. NullAway complains. What does the guide recommend?",
+    "choices": [
+      "Mark the whole class `@NullUnmarked`, since lifecycle nulling is outside NullAway's model",
+      "Make it `@Nullable` with an `@EnsuresNonNullIf` guard, or suppress NullAway on `destroy()`",
+      "Never null fields in `destroy()`; leave the references alive until GC collects the object",
+      "Annotate `destroy()` with `@Initializer` so NullAway treats the field as reassigned there"
+    ],
+    "answer": 1,
+    "explain": "For destroy-nulled fields, choose one of two strategies: `@Nullable` fields guarded by an `@EnsuresNonNullIf` check (preferred for complex cases), or suppress warnings on `destroy()` (simpler cases)."
+  },
+  {
+    "rule": "AND-053",
+    "prompt": "```java\nprivate @Nullable SomeService mService;\n\n@EnsuresNonNullIf(value = {\"mService\"}, result = false)\nprivate boolean isDestroyed() { return mService == null; }\n\npublic void doWork() {\n    if (isDestroyed()) return;\n    mService.execute();\n}\n```\nDoes NullAway warn on `mService.execute()`?",
+    "choices": [
+      "Yes — NullAway can't see through method calls, so an inline `mService != null` check is required",
+      "Yes — `@EnsuresNonNullIf` only works when `result = true`",
+      "No — `result = false` means `mService` is non-null whenever `isDestroyed()` is false",
+      "No, but only because `doWork()` is public and NullAway skips public entry points"
+    ],
+    "answer": 2,
+    "explain": "Destruction strategy 1 (preferred for complex cases): keep the field `@Nullable` and guard uses with an `@EnsuresNonNullIf(..., result = false)` `isDestroyed()` helper, which NullAway trusts."
+  },
+  {
+    "rule": "AND-054",
+    "prompt": "A simple class keeps `mService` non-null for its whole life except that `destroy()` sets it to null. What's the simple, recommended approach?",
+    "choices": [
+      "Mark `destroy()` `@NullUnmarked` so callers also skip null checks",
+      "Make the field `@Nullable` and add `assumeNonNull(mService)` at every use",
+      "Make the field `@MonotonicNonNull` so it may be set to null once",
+      "Keep it non-null; add `@SuppressWarnings(\"NullAway\")` to `destroy()`"
+    ],
+    "answer": 3,
+    "explain": "Destruction strategy 2 (simpler cases): leave the field non-null and suppress NullAway warnings on `destroy()` only."
+  },
+  {
+    "rule": "AND-044",
+    "prompt": "A RecyclerView binder sets `mField1`/`mField2` in `onBindViewHolder()`. To silence NullAway, the author adds `@Initializer` to `onBindViewHolder()`. What's the right feedback?",
+    "choices": [
+      "Don't; use an `@EnsuresNonNull` `assertBound()` helper, as binding isn't construction",
+      "Good — `@Initializer` is exactly for binder methods that set fields before first use",
+      "Use `@NullUnmarked` on the binder class instead, since RecyclerView controls binding",
+      "Initialize both fields to empty placeholder views in the constructor so they're never null"
+    ],
+    "answer": 0,
+    "explain": "`onBindViewHolder()` isn't a real initializer. Add an `assertBound()` helper annotated `@EnsuresNonNull({...})` that asserts the fields, and call it in methods that need them."
+  },
+  {
+    "rule": "AND-045",
+    "prompt": "NullAway warns about this `@NullMarked` data holder:\n```java\npublic class TabInfo {\n    public String title;\n    public String url;\n}\n```\nWhat's the recommended fix?",
+    "choices": [
+      "Annotate the class `@NullUnmarked`, since it's just a plain data struct with no logic to check",
+      "Make the fields `final`, set them in a constructor, and use `/* title= */` at call sites",
+      "Initialize both fields to `\"\"` at declaration so they're never null for readers",
+      "Add `@MonotonicNonNull` to each field so they can be assigned after construction"
+    ],
+    "answer": 1,
+    "explain": "NullAway warns on non-primitive, non-`@Nullable` public fields not set by a constructor. Add a constructor that sets all fields, with `/* paramName= */` comments for readability."
+  },
+  {
+    "rule": "AND-046",
+    "prompt": "`getTabById()` is `@Nullable`, but many callers know the tab exists and dislike the null checks. A teammate proposes changing its return type to non-null. Best response?",
+    "choices": [
+      "Agree — annotate it `@NonNull` since callers expect non-null",
+      "Have callers wrap each call in `Objects.requireNonNull()`",
+      "Keep it `@Nullable`; add `getTabByIdChecked()` returning `assertNonNull(getTabById(id))`",
+      "Annotate the method `@NullUnmarked` so callers that know the tab exists stop getting warnings"
+    ],
+    "answer": 2,
+    "explain": "Don't mis-annotate `@Nullable` methods as non-null; it hides real nullability. For Chromium-authored code, add a \"Checked\" companion for callers that know the value exists."
+  },
+  {
+    "rule": "AND-047",
+    "prompt": "You need to pass a `Supplier<@Nullable String>` to a method taking `Supplier<String>`, and you know it never returns null here. What's the idiomatic call?",
+    "choices": [
+      "`acceptsNonNullSupplier(nullableSupplier);` — the compiler handles variance",
+      "`acceptsNonNullSupplier(() -> nullableSupplier.get());`",
+      "Annotate the parameter `@NullUnmarked`",
+      "`acceptsNonNullSupplier(SupplierUtils.asNonNull(nullableSupplier));`"
+    ],
+    "answer": 3,
+    "explain": "`Supplier<T>` and `Supplier<@Nullable T>` aren't assignment-compatible due to generics invariance. Use `SupplierUtils.asNonNull()` (or an explicit cast the other way), or change the parameter type if the value may really be null."
+  },
+  {
+    "rule": "AND-048",
+    "prompt": "```java\npublic class MyComponent {\n    private SomeService mService;\n    public MyComponent() {}\n    public void initialize(SomeService service) { mService = service; }\n}\n```\nNullAway warns that `mService` isn't initialized in the constructor. What's the fix?",
+    "choices": [
+      "Annotate `initialize()` with `@Initializer`",
+      "Annotate `mService` with `@MonotonicNonNull`",
+      "Annotate the constructor with `@SuppressWarnings(\"NullAway\")`",
+      "Split setup into several `@Initializer` setters, one per field"
+    ],
+    "answer": 0,
+    "explain": "For two-phase init, mark the second-phase method `@Initializer`. NullAway doesn't verify it's called, so prefer one `initialize()` over several setters (`onCreate()` is implicitly `@Initializer`)."
+  },
+  {
+    "rule": "AND-049",
+    "prompt": "You need to silence a NullAway false positive inside one method of a migrated `@NullMarked` class, without weakening checks for its callers. Which annotation do you use?",
+    "choices": [
+      "`@NullUnmarked`",
+      "`@SuppressWarnings(\"NullAway\")`",
+      "`@Nullable` on the method's return type",
+      "Either one; they behave identically"
+    ],
+    "answer": 1,
+    "explain": "Both suppress warnings in the body, but `@NullUnmarked` makes the signature's nullability unknown to callers. Prefer `@SuppressWarnings(\"NullAway\")`; reserve `@NullUnmarked` for code not yet migrated."
+  },
+  {
+    "rule": "AND-050",
+    "prompt": "```java\nboolean isNull = thing == null;\nif (!isNull) {\n    thing.doWork();\n}\n```\nNullAway still warns on `thing.doWork()`. Why, and what's the fix?",
+    "choices": [
+      "`isNull` must be `final` for NullAway to trust it",
+      "NullAway needs `assumeNonNull(thing)` after any boolean check",
+      "NullAway can't track nullness through booleans; check `thing != null` directly",
+      "The warning is a false positive here; add `@SuppressWarnings(\"NullAway\")` to the method"
+    ],
+    "answer": 2,
+    "explain": "NullAway can't follow nullness through intermediate boolean variables (NullAway#98). Put the null check directly in the `if` condition."
+  },
+  {
+    "rule": "AND-051",
+    "prompt": "A `@NullMarked` Java class has both `@CalledByNative` methods and Java-to-native calls. Which statement is correct?",
+    "choices": [
+      "Both directions are fully checked by NullAway at compile time",
+      "Neither direction is checked, so nullability annotations on native methods are pointless",
+      "`@CalledByNative` methods are checked; Java-to-native calls are not",
+      "`@CalledByNative` methods aren't null-checked; Java-to-native calls are, via asserts"
+    ],
+    "answer": 3,
+    "explain": "Nullness isn't checked for `@CalledByNative` methods, but Java-to-native calls are checked via `assert` when `@NullMarked` is present, so annotate native-bound parameters correctly."
+  },
+  {
+    "rule": "AND-052",
+    "prompt": "Java code will be mirrored and built outside Chromium. How should nullability annotations be set up?",
+    "choices": [
+      "Use JSpecify (`org_jspecify_jspecify_java`) with `chromium_code = false` and `enable_errorprone = true`",
+      "Use `org.chromium.build.annotations` as usual; mirrored builds can simply vendor the `build_java` target",
+      "Use AndroidX `@Nullable` from `androidx.annotation`, which both builds already depend on",
+      "Omit annotations in mirrored code and set `enable_errorprone = false` in its GN target"
+    ],
+    "answer": 0,
+    "explain": "For mirrored code, use JSpecify annotations instead of Chromium's copies, add the jspecify dep, set `chromium_code = false` to avoid the `build_java` dep, and keep `enable_errorprone = true`."
+  },
+  {
+    "rule": "AND-055",
+    "prompt": "A PR adds `BraveToggleView extends FrameLayout`, a hand-drawn on/off switch for a settings screen. How should the reviewer flag it?",
+    "choices": [
+      "As a blocker: custom reimplementations of Material components aren't allowed in settings",
+      "As a `nit:` asking why `MaterialSwitch` or a Brave subclass of it wasn't used",
+      "Not at all; custom views give more control over theming",
+      "Ask the author to subclass `SwitchCompat` instead"
+    ],
+    "answer": 1,
+    "explain": "Prefer Material components, which bring motion, accessibility, and theming. Flag custom reimplementations as `nit:` only, never as a blocker, and never flag Brave subclasses of Material components."
+  },
+  {
+    "rule": "AND-056",
+    "prompt": "You're adding a new standalone `MyFeatureController.java` (no upstream subclassing) in brave-core. Where should it go?",
+    "choices": [
+      "In `android/java/org/chromium/chrome/browser/my_feature/`, appended to `brave_java_sources`",
+      "In `chrome/browser/android/` since that's the shared Android home",
+      "In `browser/my_feature/android/` as its own `android_library` in `brave_chrome_java_deps`",
+      "In both a feature module and `brave_java_sources`, for compatibility"
+    ],
+    "answer": 2,
+    "explain": "New feature-specific Java goes in the feature's Android directory (`browser/<feature>/android/`), not the legacy tree. Consumers depend on the feature target; don't also list the files in `brave_java_sources`."
+  },
+  {
+    "rule": "AND-057",
+    "prompt": "An icon sits next to a `TextView` showing the same \"Brave Shields\" title. How should the `ImageView` be declared?",
+    "choices": [
+      "`android:contentDescription=\"@string/brave_shields_title\"`",
+      "`android:contentDescription=\"\"`",
+      "Omit `contentDescription` entirely",
+      "`android:contentDescription=\"@null\"`"
+    ],
+    "answer": 3,
+    "explain": "Decorative images should use `contentDescription=\"@null\"`, not an empty string or a missing attribute, so intent is explicit and TalkBack doesn't repeat the label. Meaningful images (clickable, icon-only buttons, QR codes) still need a real description."
+  }
+]

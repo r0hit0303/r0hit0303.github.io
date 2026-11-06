@@ -1,0 +1,122 @@
+[
+  {
+    "rule": "BS-014",
+    "prompt": "You're reviewing a header where a 6-line block is guarded like this:\n\n```cpp\n#if BUILDFLAG(ENABLE_SPELLCHECK)\n#include \"components/spellcheck/common/spellcheck_features.h\"\n// ... five more lines ...\n#endif\n```\n\nWhat should the closing line look like?",
+    "choices": [
+      "`#endif  // end of block`",
+      "`#endif  // BUILDFLAG(ENABLE_SPELLCHECK)`",
+      "`#endif` with no comment — the matching `#if` is easy to find",
+      "`#endif ENABLE_SPELLCHECK`"
+    ],
+    "answer": 1,
+    "explain": "Annotate `#endif` with the condition it closes, e.g. `#endif  // BUILDFLAG(ENABLE_SPELLCHECK)`, so readers know what's ending."
+  },
+  {
+    "rule": "BS-034",
+    "prompt": "A PR adds this to a `.cc` file:\n\n```cpp\n#include \"content/public/browser/web_contents.h\"\n// ...\n#if BUILDFLAG(ENABLE_AI_CHAT)\n  SearchTabsByContent(web_contents);\n#endif\n```\n\nA reviewer asks for the `web_contents.h` include to be moved inside the `#if`. What's the right call?",
+    "choices": [
+      "Leave it unconditional: `web_contents.h` is always built",
+      "Move it inside the guard: an include should always sit next to the code that uses it",
+      "Move it inside a new `#if BUILDFLAG(ENABLE_WEB_CONTENTS)` guard",
+      "Replace the include with a forward declaration inside the guard"
+    ],
+    "answer": 0,
+    "explain": "Guard an include only when the header itself is GN-gated. Always-built headers like `web_contents.h` stay unconditional even if only used inside a guard, and never invent buildflag names."
+  },
+  {
+    "rule": "BS-034",
+    "prompt": "```cpp\n#include \"chrome/browser/extensions/extension_web_ui.h\"\n// ...\n#if BUILDFLAG(ENABLE_EXTENSIONS)\n  IsChromeURLOverridden(...);\n#endif\n```\n\n`extension_web_ui.h` is only in GN `sources` when `enable_extensions` is set. What happens and what's the fix?",
+    "choices": [
+      "It breaks builds with extensions off; move the include inside the `#if`",
+      "Wrap the include in `#ifdef ENABLE_EXTENSIONS`",
+      "Add a forward declaration of `IsChromeURLOverridden` instead",
+      "Nothing — an unused include is harmless in any build configuration, so leave it"
+    ],
+    "answer": 0,
+    "explain": "When a header is gated in GN, it doesn't exist in the disabled config, so its include must sit inside the same `#if BUILDFLAG(...)` block."
+  },
+  {
+    "rule": "BS-035",
+    "prompt": "Right after the regular includes of a file you see:\n\n```cpp\n#if BUILDFLAG(ENABLE_BRAVE_REWARDS)\n#include \"brave/components/brave_rewards/core/buildflags/buildflags.h\"\n#endif\n\n#if BUILDFLAG(ENABLE_BRAVE_REWARDS)\nnamespace rewards { ... }\n#endif\n```\n\nThis is the only guarded block in the file. What should the reviewer suggest?",
+    "choices": [
+      "Convert the second guard to a runtime `base::FeatureList` check",
+      "Remove the guard around the include and keep the one around the namespace",
+      "Merge them into a single `#if BUILDFLAG(ENABLE_BRAVE_REWARDS)` block",
+      "Keep both: includes and code must always have separate guards"
+    ],
+    "answer": 2,
+    "explain": "Consecutive regions with the same `#if BUILDFLAG(...)` condition should be one guard block — allowed for an include when it's the single guarded block right after the regular includes."
+  },
+  {
+    "rule": "BS-035",
+    "prompt": "A file has guarded code for two different flags, each needing its own guarded include. Which layout is correct?",
+    "choices": [
+      "Rewards include + code in one block, then Ads include + code in a second block",
+      "Guarded includes grouped at the top; each code block in its own guard below",
+      "One block per flag, but put the Ads block first so its include comes earlier",
+      "A single `#if BUILDFLAG(ENABLE_BRAVE_REWARDS) && BUILDFLAG(ENABLE_BRAVE_ADS)` around everything"
+    ],
+    "answer": 1,
+    "explain": "Includes always come first. Merging each include into its code block would put the second include after code (e.g. after a `namespace {...}`), so keep guarded includes grouped at the top."
+  },
+  {
+    "rule": "BS-045",
+    "prompt": "In which situation is it acceptable to **omit** the `#endif  // BUILDFLAG(...)` comment?",
+    "choices": [
+      "A 1–2 line, unambiguous block in a file that doesn't use them",
+      "A short block nested inside another `#if` block",
+      "A 5-line block that is obvious from context",
+      "A 2-line block in a file where every other `#endif` is commented"
+    ],
+    "answer": 0,
+    "explain": "Always comment `#endif` for blocks longer than 3 lines, nested blocks, or when surrounding code already does; only short (1–2 line), unambiguous blocks may skip it."
+  },
+  {
+    "rule": "BS-049",
+    "prompt": "You're introducing `enable_brave_wallet` as a build flag. What should go into the public header `brave/components/brave_wallet/browser/brave_wallet_service.h`?",
+    "choices": [
+      "Add `#error` in every `.cc` that includes the header",
+      "Wrap the whole header body in `#if BUILDFLAG(ENABLE_BRAVE_WALLET)` ... `#endif`",
+      "Nothing — the GN `sources` gating already keeps the header out of other builds",
+      "`static_assert(BUILDFLAG(ENABLE_BRAVE_WALLET));` with the buildflags include"
+    ],
+    "answer": 3,
+    "explain": "A `static_assert(BUILDFLAG(...))` in public headers catches accidental inclusion when the feature is disabled."
+  },
+  {
+    "rule": "BS-051",
+    "prompt": "```cpp\n#if BUILDFLAG(ENABLE_BRAVE_AI_CHAT)\n#include \"brave/browser/ai_chat/tools/history_tool.h\"\n#endif\n\nclass HistoryTool;  // used only in AI-chat code below\n```\n\nA reviewer asks to wrap `class HistoryTool;` in the same buildflag guard. Best response?",
+    "choices": [
+      "Agreed — every symbol tied to the feature must be guarded, including declarations",
+      "Replace the forward declaration with an unconditional include instead",
+      "Move the forward declaration inside the guarded include block",
+      "Not needed: only includes and actual usages need guards"
+    ],
+    "answer": 3,
+    "explain": "Never require `BUILDFLAG` guards for forward declarations — they pull in no dependencies. Guard the `#include` and the actual usage."
+  },
+  {
+    "rule": "BS-054",
+    "prompt": "`brave/components/foo/foo_impl.cc` is only in `sources` inside `if (enable_foo)` in BUILD.gn. It contains:\n\n```cpp\n#include \"brave/components/foo/common/buildflags/buildflags.h\"\n\n#if BUILDFLAG(ENABLE_FOO)\nvoid DoFoo() { ... }\n#endif\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — double-checking the flag is a cheap safety net",
+      "Replace the `#if` with `static_assert(BUILDFLAG(ENABLE_FOO));` in this `.cc`",
+      "Drop the buildflag include and the `#if`; they're redundant",
+      "Also remove the `if (enable_foo)` gating in BUILD.gn so the guard does the work"
+    ],
+    "answer": 2,
+    "explain": "A file already gated in BUILD.gn shouldn't re-check its own enable flag — it's redundant and misleading. `static_assert` safety nets are for public headers, not implementation files."
+  },
+  {
+    "rule": "BS-054",
+    "prompt": "`foo_service.cc` is only compiled when `enable_foo = true`. It includes `foo/common/buildflags/buildflags.h` solely to read `BUILDFLAG(FOO_API_ENDPOINT)`, a URL passed in from GN. Is that include OK?",
+    "choices": [
+      "Only if it also wraps the usage in `#if BUILDFLAG(ENABLE_FOO)` to be safe",
+      "Yes — reading other GN-passed values is a valid reason",
+      "No — hardcode the URL instead since the file is already gated",
+      "No — conditionally compiled files must never include buildflag headers"
+    ],
+    "answer": 1,
+    "explain": "The no-include rule covers only re-checking the enable/disable flag that already gates the file. Including the buildflag header to read other parameters is expected."
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "rule": "UV-001",
+    "prompt": "```cpp\nAddChildView(new views::Label(u\"Hello\"));\n// later, to remove and destroy a child:\nparent->RemoveChildView(some_child);\n```\n\nWhich version follows the standard?",
+    "choices": [
+      "Call `some_child->SetVisible(false)` instead of removing it",
+      "`AddChildView(std::make_unique<...>())`, then `RemoveChildView(child)` followed by `delete child;`",
+      "`AddChildView(std::make_unique<...>())`; remove via `parent->RemoveChildViewT(some_child)`",
+      "Keep `AddChildView(new ...)`; `RemoveChildView()` already deletes the child"
+    ],
+    "answer": 2,
+    "explain": "Use the `unique_ptr` overload of `AddChildView()`, and `RemoveChildViewT()` to remove-and-destroy: it returns a `unique_ptr`, making ownership explicit. Plain `RemoveChildView()` does not delete."
+  },
+  {
+    "rule": "UV-002",
+    "prompt": "```cpp\nMyView::~MyView() {\n  if (tab_strip_model_) {\n    tab_strip_model_->RemoveObserver(this);\n  }\n}\nvoid MyView::OnTabStripModelDestroyed(TabStripModel* model) {\n  model->RemoveObserver(this);\n}\n```\n\n`MyView` inherits `TabStripModelObserver`. What should the reviewer say?",
+    "choices": [
+      "Move the `RemoveObserver` call into `Shutdown()` instead of the destructor",
+      "Remove both calls; just null out `tab_strip_model_`",
+      "Keep the destructor call but remove the one in `OnTabStripModelDestroyed`",
+      "Correct as written — every `AddObserver` needs a matching `RemoveObserver`"
+    ],
+    "answer": 1,
+    "explain": "`~TabStripModelObserver` calls `RemoveObserver(this)` on every observed model, and `ModelDestroyed` removes it before `OnTabStripModelDestroyed`. Derived classes only clear their own state."
+  },
+  {
+    "rule": "UV-003",
+    "prompt": "```cpp\nauto* my_view = static_cast<MyCustomView*>(some_view);\nmy_view->DoSomething();\n```\n\n`some_view` is a `views::View*` that may or may not be a `MyCustomView`. What's the best replacement?",
+    "choices": [
+      "Keep `static_cast` but add `DCHECK(some_view->GetClassName() == ...)`",
+      "`reinterpret_cast<MyCustomView*>(some_view)` with a null check",
+      "`views::AsViewClass<MyCustomView>(some_view)` + null check",
+      "`dynamic_cast<MyCustomView*>(some_view)` with a null check"
+    ],
+    "answer": 2,
+    "explain": "RTTI is disabled, so `dynamic_cast` isn't available. `views::AsViewClass`/`IsViewClass` walk the `METADATA_HEADER` chain and return `nullptr` on mismatch (even for partially constructed views); `static_cast` gives UB."
+  },
+  {
+    "rule": "UV-004",
+    "prompt": "A teammate adds a new bubble:\n\n```cpp\nclass MyBubble : public views::BubbleDialogDelegateView { ... };\n```\n\nWhat should they do instead?",
+    "choices": [
+      "Build a `ui::DialogModel` and show it via `BubbleDialogModelHost`",
+      "Inherit from `views::WidgetDelegateView` and draw a bubble border",
+      "Inherit from `views::DialogDelegateView` instead",
+      "Keep it, but move business logic into a separate helper class"
+    ],
+    "answer": 0,
+    "explain": "`BubbleDialogDelegateView` is deprecated: merging delegate and view muddles ownership. Use a `ui::DialogModel` + `BubbleDialogModelHost` factory; the widget takes the host via `release()`."
+  },
+  {
+    "rule": "UV-005",
+    "prompt": "You need a non-bubble modal dialog with OK/Cancel. Which approach follows Brave's standard?",
+    "choices": [
+      "Subclass `views::DialogDelegate` and `SetContentsView()` a separate View",
+      "Subclass `views::View` and show it in a plain `views::Widget`",
+      "Subclass `views::DialogDelegateView` and lay out children directly in it",
+      "Subclass `views::BubbleDialogDelegateView` with no anchor view"
+    ],
+    "answer": 0,
+    "explain": "`DialogDelegateView` is deprecated. Inherit `DialogDelegate` alone, give it a separate contents `View`, and show it with `DialogDelegate::CreateDialogWidget()`."
+  },
+  {
+    "rule": "UV-006",
+    "prompt": "```cpp\nvoid SidebarModel::FetchFaviconFromNetwork(const SidebarItem& item) {\n  image_fetcher_->FetchImage(item.url, ...);\n}\n```\n\nThis runs for every profile, including Private and Tor windows. What's the problem and fix?",
+    "choices": [
+      "Only Tor is affected; add an `IsTor()` check and keep fetching for Incognito",
+      "No problem — favicons are public resources, so nothing leaks",
+      "Set a Tor proxy on the `ImageFetcher` so requests are routed correctly",
+      "It uses the system network context; skip if `profile_->IsOffTheRecord()`"
+    ],
+    "answer": 3,
+    "explain": "`ImageFetcherService` isn't profile-bound: off-the-record requests leave the profile's network partition and Tor requests bypass the proxy. Skip for OTR profiles and fall back to a default; use a `SimpleURLLoader` with the profile's `URLLoaderFactory` if needed."
+  },
+  {
+    "rule": "UV-007",
+    "prompt": "A \"copy screenshot\" feature writes an image to the clipboard:\n\n```cpp\nui::ScopedClipboardWriter writer(ui::ClipboardBuffer::kCopyPaste);\nwriter.WriteImage(bitmap);\n```\n\nIt can run in Private and Tor windows. What should be added?",
+    "choices": [
+      "`if (profile->IsTor()) writer.MarkAsOffTheRecord();` — Incognito is fine",
+      "`if (profile->IsOffTheRecord()) writer.MarkAsOffTheRecord();`",
+      "Clear the clipboard when the private window closes",
+      "`if (profile->IsOffTheRecord() || profile->IsTor()) writer.MarkAsOffTheRecord();`"
+    ],
+    "answer": 1,
+    "explain": "`MarkAsOffTheRecord()` keeps private content out of OS clipboard history and cloud sync. Tor profiles are off-the-record, so `IsOffTheRecord()` alone covers them."
+  }
+]

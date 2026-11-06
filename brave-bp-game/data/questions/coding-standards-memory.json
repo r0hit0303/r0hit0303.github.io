@@ -1,0 +1,506 @@
+[
+  {
+    "rule": "CSM-003",
+    "prompt": "You're reviewing this initialization code:\n\n```cpp\nvoid MyService::Init() {\n  predictor_ = new BandwidthSavingsPredictor(extractor_);\n}\nMyService::~MyService() { delete predictor_; }\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Keep it — the destructor already deletes the pointer, so nothing leaks",
+      "Wrap it in a `std::shared_ptr` so ownership stays safe if the service is ever copied",
+      "Use a `std::unique_ptr` (via `std::make_unique`) instead of manual new/delete",
+      "Store it as a `raw_ptr<>` so any dangling use is detected at runtime"
+    ],
+    "answer": 2,
+    "explain": "Avoid manual `new`/`delete`. Use `std::unique_ptr`, stack variables, or member initializer lists like `predictor_(std::make_unique<...>(extractor))`."
+  },
+  {
+    "rule": "CSM-004",
+    "prompt": "A class receives a `PrefService*` from its factory; the `PrefService` is owned by the profile. A teammate stores it as `std::unique_ptr<PrefService> prefs_` \"to be safe\". What's the right review comment?",
+    "choices": [
+      "Don't wrap an unowned resource in an ownership type; it will double free",
+      "Fine, as long as `prefs_` is declared last so it's destroyed first",
+      "Use `std::shared_ptr` instead so the profile and the class can share it",
+      "Fine, but call `prefs_.release()` in the destructor to avoid a double delete"
+    ],
+    "answer": 0,
+    "explain": "If a class doesn't own a resource, don't create ownership wrappers for it — doing so is a common source of crashes."
+  },
+  {
+    "rule": "CSM-005",
+    "prompt": "Two objects need to share ownership of a cache. A teammate writes:\n\n```cpp\nstd::shared_ptr<Cache> cache_;\n```\n\nWhat's the best response?",
+    "choices": [
+      "Approve; `std::shared_ptr` is the standard C++ tool for shared ownership of a cache",
+      "Approve only if `std::make_shared` constructs it, so the control block is co-allocated",
+      "Replace with `std::weak_ptr` on both sides so neither object keeps the cache alive",
+      "`std::shared_ptr` is banned; use unique ownership, or `scoped_refptr` if truly needed"
+    ],
+    "answer": 3,
+    "explain": "`std::shared_ptr` is on Chromium's banned features list. Prefer unique ownership; use `base::RefCounted` / `scoped_refptr` only when shared ownership is truly needed."
+  },
+  {
+    "rule": "CSM-006",
+    "prompt": "Which `Shutdown()` implementation follows the standard for a class with a `weak_factory_` and pending async callbacks?",
+    "choices": [
+      "```cpp\nvoid MyClass::Shutdown() {\n  CleanupResources();\n}\n```",
+      "```cpp\nvoid MyClass::Shutdown() {\n  weak_factory_.InvalidateWeakPtrs();\n  CleanupResources();\n}\n```",
+      "```cpp\nvoid MyClass::Shutdown() {\n  CleanupResources();\n  weak_factory_.InvalidateWeakPtrs();\n}\n```",
+      "Nothing is needed; the `WeakPtrFactory` destructor handles it"
+    ],
+    "answer": 1,
+    "explain": "Call `weak_factory_.InvalidateWeakPtrs()` at the *start* of shutdown, otherwise pending callbacks can fire on a partially-destroyed object."
+  },
+  {
+    "rule": "CSM-007",
+    "prompt": "An async completion handler looks like this, where `request_` is a `base::WeakPtr<Request>`:\n\n```cpp\nvoid OnCallback() {\n  request_->Complete(result);\n}\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Replace the WeakPtr with `base::Unretained`, since the request outlives the callback",
+      "Nothing; WeakPtr dereferences are automatically no-ops when invalidated",
+      "Add `DCHECK_CALLED_ON_VALID_SEQUENCE` and an early `if (!request_) return;`",
+      "Wrap the call in a try/catch so an invalid pointer can't crash the process"
+    ],
+    "answer": 2,
+    "explain": "Always check a `base::WeakPtr` is valid before dereferencing, especially after async operations, and add thread checkers to methods using WeakPtrs."
+  },
+  {
+    "rule": "CSM-008",
+    "prompt": "A new class needs to hand out weak pointers to itself. Which declaration follows the standard?",
+    "choices": [
+      "`class MyClass : public base::SupportsWeakPtr<MyClass> {};`",
+      "`class MyClass { std::weak_ptr<MyClass> self_; };`",
+      "`class MyClass { base::WeakPtrFactory<MyClass> weak_factory_{this}; };` as the first member",
+      "`class MyClass { base::WeakPtrFactory<MyClass> weak_factory_{this}; };` as the last member"
+    ],
+    "answer": 3,
+    "explain": "Use a `base::WeakPtrFactory<T>` member (declared last) instead of inheriting `base::SupportsWeakPtr<T>`; the factory performs more safety checks."
+  },
+  {
+    "rule": "CSM-009",
+    "prompt": "Reviewing this async call:\n\n```cpp\nauto weak_this = weak_ptr_factory_.GetWeakPtr();\nrpc_->GetNetworkName(base::BindOnce(\n    [](base::WeakPtr<MyService> self, Callback cb,\n       const std::string& name) {\n      if (!self) return;\n      std::move(cb).Run(name);\n    }, weak_this, std::move(callback)));\n```\n\nWhat's the preferred fix?",
+    "choices": [
+      "Bind a member method directly: `BindOnce(&MyService::OnGetNetworkName, weak_this, ...)`",
+      "Capture `this` in the lambda instead of a WeakPtr, since the service owns `rpc_`",
+      "Keep it — the lambda's `if (!self)` check already makes it safe and readable",
+      "Bind `base::Unretained(this)` into the lambda instead, saving the null check entirely"
+    ],
+    "answer": 0,
+    "explain": "With WeakPtrs in async callbacks, bind to a member function so the call is auto-cancelled if the WeakPtr is invalid; don't capture the WeakPtr in a lambda."
+  },
+  {
+    "rule": "CSM-010",
+    "prompt": "A teammate needs to run a blocking file read and then update UI state:\n\n```cpp\nbase::ThreadPool::PostTask(\n    FROM_HERE,\n    base::BindOnce(&MyClass::ReadAndUpdate, base::Unretained(this)));\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Switch to `base::BindRepeating` so the task can be retried if the read fails",
+      "Keep `Unretained` but add a `SEQUENCE_CHECKER` to `ReadAndUpdate` to catch misuse",
+      "Capture a raw `this` in a lambda instead, since `Unretained` is just a wrapper for it",
+      "Post a static blocking function with `PostTaskAndReplyWithResult`; reply via a WeakPtr"
+    ],
+    "answer": 3,
+    "explain": "Never use `base::Unretained` when posting to thread pools — it leads to use-after-free. Run the blocking work on the pool and handle the result on the main thread via `PostTaskAndReplyWithResult` with a WeakPtr."
+  },
+  {
+    "rule": "CSM-011",
+    "prompt": "A class owns a `base::RepeatingTimer timer_` and starts it like this:\n\n```cpp\ntimer_.Start(FROM_HERE, delay,\n    base::BindRepeating(&MyClass::OnTimer,\n                        weak_factory_.GetWeakPtr()));\n```\n\nA reviewer is deciding what to comment. What's appropriate?",
+    "choices": [
+      "Flag it as a bug: owned timers must use `base::Unretained(this)`, never a WeakPtr",
+      "At most a nit that `Unretained(this)` is preferred for an owned timer; not a bug",
+      "Flag it as a bug: owned timers can fire after destruction, so add `InvalidateWeakPtrs()`",
+      "Require `base::ThreadPool::PostDelayedTask` instead, so the timer isn't needed"
+    ],
+    "answer": 1,
+    "explain": "For a self-owned timer, `base::Unretained(this)` is preferred because the timer dies with the class. Using a WeakPtr is just overhead — a style preference, never a correctness bug, and never insist on changing it."
+  },
+  {
+    "rule": "CSM-012",
+    "prompt": "A class owns `mojo::Remote<mojom::Foo> remote_` and sets:\n\n```cpp\nremote_.set_disconnect_handler(\n    base::BindOnce(&MyClass::OnDisconnect,\n                   base::Unretained(this)));\n```\n\nAn automated review bot flags `base::Unretained` here as a potential UaF. Your call?",
+    "choices": [
+      "Agree; Mojo disconnect handlers must always bind a WeakPtr, even when owned",
+      "Agree; bind `base::DoNothing()` and poll `is_connected()` instead",
+      "Disagree; `this` owns the endpoint, so it can't fire after destruction",
+      "Agree; move the remote into a `std::unique_ptr` so its lifetime is explicit"
+    ],
+    "answer": 2,
+    "explain": "`base::Unretained(this)` in disconnect/error handlers is safe when the class owns the `mojo::Remote`/`Receiver`/`AssociatedRemote` — the endpoint is destroyed with the class."
+  },
+  {
+    "rule": "CSM-013",
+    "prompt": "Which member ordering follows the standard?",
+    "choices": [
+      "```cpp\nclass MyService {\n  raw_ptr<PrefService> prefs_;\n  std::unique_ptr<Fetcher> fetcher_;\n  raw_ptr<ProfileManager> profile_manager_;\n};\n```",
+      "```cpp\nclass MyService {\n  raw_ptr<PrefService> prefs_;\n  raw_ptr<ProfileManager> profile_manager_;\n  std::unique_ptr<Fetcher> fetcher_;\n};\n```",
+      "Ordering doesn't matter as long as members are alphabetized",
+      "```cpp\nclass MyService {\n  std::unique_ptr<Fetcher> fetcher_;\n  raw_ptr<PrefService> prefs_;\n  raw_ptr<ProfileManager> profile_manager_;\n};\n```"
+    ],
+    "answer": 3,
+    "explain": "Place owning members (like `std::unique_ptr<>`) first and unowned `raw_ptr<>` members after them; it follows Chromium convention and makes ownership visually clear."
+  },
+  {
+    "rule": "CSM-014",
+    "prompt": "You need to act on a set of tabs after an async fetch completes. You currently have `std::vector<raw_ptr<Tab>> tabs`. What should you bind into the callback?",
+    "choices": [
+      "`std::move(tabs)` — `raw_ptr` detects dangling pointers, so binding it is safe",
+      "A `std::vector<base::WeakPtr<Tab>>` built from each tab's `GetWeakPtr()`",
+      "A `std::vector<Tab*>`, avoiding `raw_ptr` overhead inside the callback",
+      "A `base::span<raw_ptr<Tab>>` over the vector, so nothing is copied"
+    ],
+    "answer": 1,
+    "explain": "Never capture `std::vector<raw_ptr<T>>` in async callbacks — the pointers may dangle by the time it runs. Bind a `std::vector<base::WeakPtr<T>>` instead."
+  },
+  {
+    "rule": "CSM-015",
+    "prompt": "A single-threaded class has a `SEQUENCE_CHECKER(sequence_checker_)`, but only 2 of its 10 methods call `DCHECK_CALLED_ON_VALID_SEQUENCE`. Best review comment?",
+    "choices": [
+      "Apply the check to all methods or drop the checker; partial checking misleads",
+      "Fine; only the methods that touch shared state need the sequence check",
+      "Replace the checker with a `base::Lock` so every method is protected, not just two",
+      "Move the two checked methods into a separate class with its own checker"
+    ],
+    "answer": 0,
+    "explain": "Use `SEQUENCE_CHECKER` consistently — all methods or none. Partial checking is misleading and makes correct code look unsafe."
+  },
+  {
+    "rule": "CSM-016",
+    "prompt": "A `KeyedService` owns a fetcher and a database handle, and releases them only in its destructor. What's the guidance?",
+    "choices": [
+      "That's correct; the destructor is the idiomatic RAII place for this cleanup",
+      "Move cleanup to a static `atexit` handler so it runs after all services",
+      "Release them in `Shutdown()` too, for orderly service-graph teardown",
+      "Release them lazily on first use after shutdown has been signalled"
+    ],
+    "answer": 2,
+    "explain": "For `KeyedService`s, clean up owned resources in `Shutdown()`, not just the destructor — the service graph has dependencies that require orderly teardown."
+  },
+  {
+    "rule": "CSM-017",
+    "prompt": "A `KeyedService` observes prefs via a `PrefChangeRegistrar` member and another source via `base::ScopedObservation`. Its `Shutdown()` is empty. A teammate says \"ScopedObservation unsubscribes automatically, so we're fine.\" Response?",
+    "choices": [
+      "Agreed; ScopedObservation and the registrar both clean up in the destructor, which is enough",
+      "Agreed, but add a DCHECK in the destructor that no observers remain registered",
+      "Replace ScopedObservation with manual `AddObserver` calls in the constructor only",
+      "Call `pref_change_registrar_.RemoveAll()` and `observation_.Reset()` in `Shutdown()`"
+    ],
+    "answer": 3,
+    "explain": "`ScopedObservation` can still lead to UaF: other services can trigger callbacks during their shutdown after yours. Always explicitly unsubscribe observers and pref registrars in `KeyedService::Shutdown()`."
+  },
+  {
+    "rule": "CSM-018",
+    "prompt": "You're adding a service under `components/` that needs prefs and network access. Which constructor follows the standard?",
+    "choices": [
+      "`MyFeatureService(content::BrowserContext* context, scoped_refptr<network::SharedURLLoaderFactory> factory);`",
+      "`MyFeatureService(PrefService* prefs, scoped_refptr<network::SharedURLLoaderFactory> factory);`",
+      "`MyFeatureService(Profile* profile, scoped_refptr<network::SharedURLLoaderFactory> factory);`",
+      "`MyFeatureService(content::WebContents* web_contents, PrefService* prefs);`"
+    ],
+    "answer": 1,
+    "explain": "Component services should take specific dependencies like `PrefService*` and a URL loader factory, not `BrowserContext` — that prevents iOS reuse and adds content-layer dependencies."
+  },
+  {
+    "rule": "CSM-019",
+    "prompt": "A method `OnDataLoaded()` is only ever invoked via `base::BindOnce(&MyClass::OnDataLoaded, weak_factory_.GetWeakPtr())`. What should it contain to follow the standard?",
+    "choices": [
+      "A `DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_)` at the top",
+      "A `base::AutoLock` around the whole body, since callbacks may run concurrently",
+      "Nothing extra; `BindOnce` with a WeakPtr already guarantees the right sequence",
+      "A `CHECK(this)` at the top to catch an invalidated WeakPtr"
+    ],
+    "answer": 0,
+    "explain": "Methods used as `base::BindOnce` / `base::BindRepeating` targets should include `DCHECK_CALLED_ON_VALID_SEQUENCE` to ensure they run on the correct thread."
+  },
+  {
+    "rule": "CSM-020",
+    "prompt": "A teammate adds this at file scope:\n\n```cpp\nstatic const std::map<std::string, int> kMyLookup = {\n    {\"foo\", 1}, {\"bar\", 2}};\n```\n\nWhat's the right fix?",
+    "choices": [
+      "Make it `inline` instead of `static` so there's one copy across TUs",
+      "It's fine because it's `const`, so it's initialized at compile time",
+      "Return a function-local `static const base::NoDestructor<std::map<...>>`",
+      "Allocate it with `new` and never delete it, avoiding exit-time destructors"
+    ],
+    "answer": 2,
+    "explain": "Chromium prohibits globals with non-trivial destructors. Use `base::NoDestructor` as a function-local static (or `constexpr` for simple arrays/values)."
+  },
+  {
+    "rule": "CSM-021",
+    "prompt": "`ContentScraper::Process()` does blocking work and is used from the UI thread. Callers currently each post manually to the thread pool and bind weak pointers. What does the standard suggest?",
+    "choices": [
+      "Make `Process()` run synchronously on the UI thread with `ScopedAllowBlocking`",
+      "Make `ContentScraper` ref-counted (`RefCountedThreadSafe`) so it can be shared across threads",
+      "Use `base::Unretained` for all the posted tasks, since the scraper outlives them",
+      "Hold a `base::SequenceBound<ContentScraper>` and use `AsyncCall(&ContentScraper::Process)`"
+    ],
+    "answer": 3,
+    "explain": "For blocking/IO classes accessed asynchronously from the UI thread, use `base::SequenceBound<T>`: it binds the object to a task runner and posts all calls there automatically."
+  },
+  {
+    "rule": "CSM-022",
+    "prompt": "Which thread-pool post follows the standard for non-urgent work that can safely be abandoned at shutdown?",
+    "choices": [
+      "`base::ThreadPool::PostTask(FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT}, task);`",
+      "`base::ThreadPool::PostTask(FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT, base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}, task);`",
+      "`base::ThreadPool::PostTask(FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT, base::TaskShutdownBehavior::BLOCK_SHUTDOWN}, task);`",
+      "`base::ThreadPool::PostTask(FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING, base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}, task);`"
+    ],
+    "answer": 1,
+    "explain": "Explicitly specify `base::TaskPriority` and shutdown behavior instead of relying on defaults — `BEST_EFFORT` for non-urgent work, `SKIP_ON_SHUTDOWN` when it can be abandoned."
+  },
+  {
+    "rule": "CSM-023",
+    "prompt": "New code needs to encrypt a token before storing it. A teammate writes `OSCrypt::EncryptString(plaintext, &ciphertext);`. What's the review feedback?",
+    "choices": [
+      "Fine, as long as it's called off the UI thread, since it may block on the keychain",
+      "Use the async OSCrypt interface (`os_crypt_async`); the sync one is deprecated",
+      "Wrap it in `base::ThreadPool::PostTask` so encryption never blocks the UI",
+      "Store the token in plain prefs instead; prefs are already protected by the OS"
+    ],
+    "answer": 1,
+    "explain": "New code must use the async OSCrypt interface; the legacy synchronous `OSCrypt` interface is deprecated."
+  },
+  {
+    "rule": "CSM-024",
+    "prompt": "A component-level `DefaultBrowserMonitor` needs platform-specific \"is default browser?\" logic. Which design does the standard prefer?",
+    "choices": [
+      "Store a `base::RepeatingCallback<bool()> is_default_browser_callback_` passed in by the platform layer",
+      "Add `#if BUILDFLAG(IS_WIN)` / `IS_MAC` blocks directly in the component class",
+      "A nested `Delegate` interface (`virtual bool IsDefaultBrowser() = 0;`) owned via `std::unique_ptr`",
+      "Have the component include the browser-layer shell-integration header directly"
+    ],
+    "answer": 2,
+    "explain": "For cross-layer platform behavior, use a dedicated delegate class rather than raw callbacks — cleaner interfaces, safer lifetimes, and better testability."
+  },
+  {
+    "rule": "CSM-025",
+    "prompt": "Reviewing:\n\n```cpp\nremote_.set_disconnect_handler(\n    base::BindOnce(&MyClass::OnDisconnect,\n                   base::Unretained(this)));\nvoid MyClass::OnDisconnect() { remote_.reset(); }\n```\n\nWhat's the best suggestion?",
+    "choices": [
+      "Replace with `remote_.reset_on_disconnect();`",
+      "Replace `base::Unretained(this)` with a WeakPtr — it's a UaF",
+      "Call `remote_.reset()` in the destructor too",
+      "No change; this is the idiomatic pattern"
+    ],
+    "answer": 0,
+    "explain": "When the disconnect handler only resets the remote, use the built-in `remote.reset_on_disconnect()` instead of a manual handler."
+  },
+  {
+    "rule": "CSM-026",
+    "prompt": "A feature needs to remember a list of tabs to close later. Which member type is preferred?",
+    "choices": [
+      "`std::vector<content::WebContents*> tabs_to_close_;`",
+      "`std::vector<raw_ptr<content::WebContents>> tabs_to_close_;`",
+      "`std::vector<std::string> tabs_to_close_;` holding each tab's URL",
+      "`std::vector<tabs::TabHandle> tabs_to_close_;`"
+    ],
+    "answer": 3,
+    "explain": "Store `tabs::TabHandle`s (integer IDs) rather than `WebContents*`; raw pointers can dangle and be reused for a different allocation, but handles can't accidentally point to a different tab."
+  },
+  {
+    "rule": "CSM-027",
+    "prompt": "A new mojom method lets the renderer-hosted WebUI ask the browser to fetch data: `FetchResource(url.mojom.Url url)`. The browser only ever needs to fetch from three known endpoints. What should the reviewer suggest?",
+    "choices": [
+      "Add a doc comment stating that the URL must be validated by the browser",
+      "Restrict the input to an enum/allowlist of the known endpoints",
+      "Accept the URL as a `string` instead of `url.mojom.Url` and parse it browser-side",
+      "Nothing; the browser process is trusted, so fetching any URL is fine"
+    ],
+    "answer": 1,
+    "explain": "Mojom interfaces taking URLs from less-privileged processes should consider an allowlist or enum — an unrestricted URL lets the renderer send requests to any endpoint."
+  },
+  {
+    "rule": "CSM-027",
+    "prompt": "A mojom method accepts a URL from the renderer, and the browser-side implementation already filters it against an allowlist downstream. Nearby similar methods have no URL-validation comments. Should the reviewer request a doc comment about URL validation?",
+    "choices": [
+      "Yes; every URL parameter in a mojom interface must document its validation",
+      "Yes, and also require a second validation step in the mojom traits",
+      "No; it's validated downstream and nearby code has no such comments",
+      "No, but require converting the parameter to a string to avoid parsing bugs"
+    ],
+    "answer": 2,
+    "explain": "Never request URL-validation doc comments if the implementation already validates downstream; check surrounding code first, or you introduce inconsistency and verbosity."
+  },
+  {
+    "rule": "CSM-028",
+    "prompt": "`service->ForEach()` takes a `base::FunctionRef<void(Item&)>`. A test just wants to iterate without doing anything. Which compiles and follows the standard?",
+    "choices": [
+      "`service->ForEach(base::DoNothing());`",
+      "`service->ForEach([](Item&) {});`",
+      "`service->ForEach(base::NullCallback());`",
+      "`service->ForEach(nullptr);`"
+    ],
+    "answer": 1,
+    "explain": "`base::DoNothing()` doesn't match `base::FunctionRef<void(T&)>` signatures; use an explicit no-op lambda instead."
+  },
+  {
+    "rule": "CSM-029",
+    "prompt": "Reviewing:\n\n```cpp\nif (!task_id_.is_null()) {\n  actor_service_->GetTask(task_id_)->Pause(false);\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — a non-null ID guarantees the task still exists in the service",
+      "Wrap `actor_service_` in a WeakPtr, since the service may be destroyed first",
+      "Add `DCHECK(task_id_)` before the call to document the invariant",
+      "Null-check `GetTask()`'s result before calling `Pause()`; it may be gone"
+    ],
+    "answer": 3,
+    "explain": "Always null-check return values from methods that can return nullptr — a valid ID doesn't guarantee the lookup succeeds. When chaining `a->GetB()->DoC()`, store and check the intermediate."
+  },
+  {
+    "rule": "CSM-030",
+    "prompt": "Reviewing:\n\n```cpp\nif (auto result = ParseEvent(params, std::move(model_key))) {\n  callback.Run(std::move(*result));\n}\n// ... later in the same function ...\ncallback.Run(GenerationResultData(std::move(event), model_key));\n```\n\nWhat's the problem?",
+    "choices": [
+      "`model_key` is used after move; don't move it (pass by const ref)",
+      "Nothing — the move is inside an `if`, so it only matters on one branch",
+      "`std::move(*result)` should be `result.value()` to avoid UB on empty optionals",
+      "`callback` should be `std::move`d into `Run()` to avoid a copy"
+    ],
+    "answer": 0,
+    "explain": "Never use a variable after `std::move()` — it's in a valid but unspecified state. This applies even when the move is inside a branch."
+  },
+  {
+    "rule": "CSM-031",
+    "prompt": "Which signature follows the standard for a function that inspects a `Foo` without changing ownership and that requires a non-null value?",
+    "choices": [
+      "`void Process(const std::unique_ptr<Foo>& foo);`",
+      "`void Process(const scoped_refptr<Foo>& foo);`",
+      "`void Process(Foo& foo);`",
+      "`void Process(std::unique_ptr<Foo> foo);`"
+    ],
+    "answer": 2,
+    "explain": "Don't pass smart pointers by const reference — it forces heap allocation and couples callers to an ownership model. Use `T*` or `T&` (when non-null is required)."
+  },
+  {
+    "rule": "CSM-032",
+    "prompt": "A teammate makes a class `base::RefCountedThreadSafe` because it's accessed from two threads and they're unsure who should delete it. What's the guidance?",
+    "choices": [
+      "Good choice; thread-safe refcounting removes lifetime concerns across both threads",
+      "Use `std::shared_ptr` instead; its atomic refcount is the standard C++ equivalent",
+      "Redesign for single ownership; if refcounting is truly needed, keep it on one sequence",
+      "Make it a leaky global singleton (`base::NoDestructor`) so it's never deleted mid-use"
+    ],
+    "answer": 2,
+    "explain": "Refcounting makes ownership and destruction order hard to reason about, especially across threads. Prefer a redesign with single ownership; otherwise pin to one sequence, proxy via `PostTask()`, and use `WeakPtr` binds."
+  },
+  {
+    "rule": "CSM-033",
+    "prompt": "A class caches a pref dict for later use:\n\n```cpp\ndict_ = &pref_service_->GetDict(kMyPref);  // const base::Value::Dict*\n```\n\nWhat should it do instead?",
+    "choices": [
+      "Store it as a `raw_ptr<const base::Value::Dict>` for UaF detection",
+      "Store a `.Clone()` of the dict by value, or read it inline when needed",
+      "Store it as a `const base::Value::Dict&` member bound in the constructor",
+      "It's fine — the `PrefService` outlives this class, so the pointer stays valid"
+    ],
+    "answer": 1,
+    "explain": "Never hold pointers to a `base::Value` returned from `PrefService` — it dangles when the pref updates or the service is destroyed. Clone it for longer-lived use, or use it inline."
+  },
+  {
+    "rule": "CSM-034",
+    "prompt": "`map_` holds `std::string_view` keys pointing into strings stored in `strings_`. Which declaration order is safe?",
+    "choices": [
+      "```cpp\nclass NameTable {\n  std::deque<std::string> strings_;\n  base::flat_map<std::string_view, NameId> map_;\n};\n```",
+      "```cpp\nclass NameTable {\n  base::flat_map<std::string_view, NameId> map_;\n  std::deque<std::string> strings_;\n};\n```",
+      "Either; destruction order of members is unspecified",
+      "Either, as long as the destructor calls `map_.clear()` first"
+    ],
+    "answer": 0,
+    "explain": "Members are destroyed in reverse declaration order, so declare the depended-upon member (`strings_`) first; it is then destroyed last."
+  },
+  {
+    "rule": "CSM-035",
+    "prompt": "Sequence-aware code needs per-sequence cached state. A teammate adds `thread_local std::string cache;`. What's the guidance?",
+    "choices": [
+      "Fine — `thread_local` is the C++ standard tool, and a sequence maps to one thread",
+      "Wrap it in `base::NoDestructor` and keep `thread_local`, which avoids exit-time destructors",
+      "Use `thread_local raw_ptr<std::string>`, since a pointer is trivially destructible",
+      "Use `base::SequenceLocalStorageSlot`; `thread_local` needs trivially destructible types"
+    ],
+    "answer": 3,
+    "explain": "Prefer `base::SequenceLocalStorageSlot` for sequence-aware code. `thread_local` requires trivially destructible types (not `raw_ptr`), no `COMPONENT_EXPORT`, and `ABSL_CONST_INIT` at namespace/class scope."
+  },
+  {
+    "rule": "CSM-036",
+    "prompt": "A class must always hold a valid, never-changing reference to its `BrowserWindowInterface`, passed into the constructor as `BrowserWindowInterface&`. Which field declaration is preferred?",
+    "choices": [
+      "`BrowserWindowInterface& window_;`",
+      "`raw_ptr<BrowserWindowInterface> window_;`",
+      "`const raw_ref<BrowserWindowInterface> window_;`",
+      "`raw_ref<BrowserWindowInterface> window_;`"
+    ],
+    "answer": 2,
+    "explain": "Use `const raw_ref<T>` for fields that must never be null (the `const` prevents rebinding, like `T&`); `raw_ptr<T>` is the default for nullable/reassignable non-owning fields."
+  },
+  {
+    "rule": "CSM-036",
+    "prompt": "A constructor stores `browser->GetProfile()` (which effectively never returns null) into a field, and the author wraps it in `CHECK_DEREF(...)`. When is `CHECK_DEREF` appropriate?",
+    "choices": [
+      "Always — every pointer-to-reference conversion into a `raw_ref` needs `CHECK_DEREF`",
+      "Only when the pointer could really be null; here it's a redundant check",
+      "Never — plain `*ptr` is equivalent, since a null deref crashes anyway",
+      "Only inside tests, where a crash message is more useful than a deref"
+    ],
+    "answer": 1,
+    "explain": "`CHECK_DEREF` asserts non-null and is safer than `*ptr`, but don't use it reflexively: reserve it for pointers that could really be null, not ones like `GetProfile()` that upstream doesn't check."
+  },
+  {
+    "rule": "CSM-037",
+    "prompt": "Reviewing:\n\n```cpp\nvoid Schedule(std::string_view name) {\n  task_runner_->PostTask(FROM_HERE,\n      base::BindOnce(&MyClass::OnReady,\n                     weak_factory_.GetWeakPtr(), name));\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — `BindOnce` copies bound arguments, so the string data is safe",
+      "Fine — the WeakPtr cancels the task if anything is destroyed",
+      "Use `base::Unretained(this)` instead, since the WeakPtr is what can dangle",
+      "Bind an owning `std::string(name)`; copying a view copies only the pointer"
+    ],
+    "answer": 3,
+    "explain": "`base::Bind*` doesn't catch view types like `std::string_view`/`base::span`. Bind an owning copy (`std::string`, `std::vector`), unless using `base::raw_span` or the storage is static."
+  },
+  {
+    "rule": "CSM-037",
+    "prompt": "Which of these bound view arguments is acceptable per the standard?",
+    "choices": [
+      "A naked `base::span<const uint8_t>` over a local `std::vector` in a posted task",
+      "A `base::span` over a `constexpr` static array",
+      "A `std::string_view` of a `std::string` parameter",
+      "A `base::span` over a member vector bound with `base::Unretained`"
+    ],
+    "answer": 1,
+    "explain": "Binding a view is OK only with `base::raw_span<T>` (dangling protection) or when the backing storage is static, like a `constexpr` array or a string literal."
+  },
+  {
+    "rule": "CSM-038",
+    "prompt": "A class holds a `PrefChangeRegistrar` member and registers:\n\n```cpp\npref_change_registrar_.Add(kSomePref,\n    base::BindRepeating(&MyClass::OnPrefChanged,\n                        base::Unretained(this)));\n```\n\nA linter flags every `base::Unretained(this)`. What's correct?",
+    "choices": [
+      "Safe — the registrar is a member destroyed with `this`; don't flag it",
+      "Flag it — `PrefChangeRegistrar` callbacks can run after `this` and need a WeakPtr",
+      "Flag it only if the registrar observes `local_state`, which outlives profiles",
+      "Flag it — bind `base::DoNothing()` instead and read the pref on demand"
+    ],
+    "answer": 0,
+    "explain": "`base::Unretained(this)` is safe when the callback is owned by `this` or a member destroyed with it (registrars, timers, owned Mojo endpoints, `CallbackListSubscription`). Only flag it when the callback can outlive `this`."
+  },
+  {
+    "rule": "CSM-039",
+    "prompt": "Which signature correctly expresses that `SetDelegate` takes ownership of the delegate?",
+    "choices": [
+      "`void SetDelegate(Delegate* delegate);` with `delegate_.reset(delegate)` inside",
+      "`void SetDelegate(Delegate& delegate);`",
+      "`void SetDelegate(std::unique_ptr<Delegate> delegate);`",
+      "`void SetDelegate(const std::unique_ptr<Delegate>& delegate);`"
+    ],
+    "answer": 2,
+    "explain": "Pointer types in signatures are the ownership contract: `std::unique_ptr<T>` means the function takes ownership. A function must never take ownership of a `T*` parameter."
+  },
+  {
+    "rule": "CSM-039",
+    "prompt": "A function builds a local `std::unique_ptr<Foo> foo` and returns it. A teammate writes `return std::move(foo);`. Also, a separate function returns a plain moveable value type wrapped in `std::unique_ptr`. What's the guidance?",
+    "choices": [
+      "Both are correct; explicit `std::move` makes the transfer of ownership clear",
+      "Use `return foo;` (`std::move` blocks elision) and return moveable types by value",
+      "Keep `return std::move(foo);`, but return value types as raw `T*` to avoid copies",
+      "Use `std::shared_ptr` for both returns so callers can share the result freely"
+    ],
+    "answer": 1,
+    "explain": "Don't `std::move()` a local on return — it suppresses copy elision. And a smart pointer isn't the default way to move a value: take or return moveable types by value."
+  },
+  {
+    "rule": "CSM-040",
+    "prompt": "Reviewing Windows code:\n\n```cpp\nHANDLE file = ::CreateFile(...);\nif (!IsValid(file)) {\n  return false;\n}\n::CloseHandle(file);\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Add `::CloseHandle(file)` before every early return to avoid the leak",
+      "Wrap it in `std::unique_ptr<HANDLE>` so it's freed automatically",
+      "Use `base::win::ScopedHandle` so it's closed on destruction",
+      "Use `base::mac::ScopedCFTypeRef` so the same code is portable"
+    ],
+    "answer": 2,
+    "explain": "Don't manage OS handles by hand; use platform scopers such as `base::win::ScopedHandle` and `base::apple::ScopedCFTypeRef<T>`, which release on destruction."
+  }
+]

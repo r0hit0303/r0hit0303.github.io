@@ -1,0 +1,890 @@
+[
+  {
+    "rule": "CSA-001",
+    "prompt": "A PR adds a hand-written helper:\n\n```cpp\nstd::string ParseQueryParam(const std::string& url, const std::string& key) {\n  // 30 lines of custom '?', '&' and '=' splitting...\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Approve if unit tests cover the edge cases like empty values and fragments",
+      "Move it to a shared `brave/` utils file so other components can reuse it",
+      "Use an existing utility such as `net::QueryIterator`",
+      "Rewrite it with `std::regex` so the parsing is more robust to odd inputs"
+    ],
+    "answer": 2,
+    "explain": "Check for existing well-tested Chromium/base utilities before writing custom code — e.g. `net::QueryIterator` for query strings."
+  },
+  {
+    "rule": "CSA-002",
+    "prompt": "New code contains:\n\n```cpp\nbase::Callback<void(bool)> cb = base::Bind(&Foo::OnDone, weak_ptr);\nservice->Start(cb);\n```\n\n`Start` runs the callback exactly once. What's the right fix?",
+    "choices": [
+      "Use `base::BindOnce` but pass the callback by `const&` to avoid a move",
+      "Nothing — `base::Bind` is fine as long as the callback runs only once",
+      "`base::OnceCallback` + `base::BindOnce`, passed via `std::move(cb)`",
+      "Replace it with a `std::function<void(bool)>` holding a lambda"
+    ],
+    "answer": 2,
+    "explain": "`base::Callback`/`base::Bind` are deprecated. Use `OnceCallback`/`BindOnce` (or the `Repeating` variants), and `std::move` a `OnceCallback` when passing or running it."
+  },
+  {
+    "rule": "CSA-003",
+    "prompt": "```cpp\ntime_t now = std::time(nullptr);\nif (now - last_check_ > kOneDay) Refresh();\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Use `base::Time` / `base::TimeDelta` instead",
+      "Use `localtime()` from `<ctime>` so the comparison is in local time",
+      "Keep `time_t` but store it in a `uint64_t` to avoid the year-2038 problem",
+      "Fine — `std::time` is portable standard C++"
+    ],
+    "answer": 0,
+    "explain": "Never use C-style `std::time`, `ctime` or `time_t`; use `base::Time` and related classes, which are cross-platform and type-safe."
+  },
+  {
+    "rule": "CSA-004",
+    "prompt": "```cpp\nconst auto* name = dict->FindStringKey(\"name\");\nconst auto age = dict->FindIntKey(\"age\");\nif (name) result.name = *name;\nif (age) result.age = *age;\n// ...repeated for 12 more fields\n```\n\nWhat's the preferred approach for turning this JSON into `MyType`?",
+    "choices": [
+      "Keep the manual lookups; they're the most explicit and easiest to debug",
+      "Serialize with `JSONWriter` and pattern-match on the resulting string",
+      "Register the fields with `base::JSONValueConverter<MyType>`",
+      "Store the whole `base::Value::Dict` as a member instead of typed fields"
+    ],
+    "answer": 2,
+    "explain": "Prefer `base::JSONValueConverter` over manual key-by-key parsing, which is verbose, error-prone, and duplicates boilerplate."
+  },
+  {
+    "rule": "CSA-005",
+    "prompt": "```cpp\nstd::unordered_map<std::string, double> feature_map_;\n```\n\nThis is a general-purpose, unordered map of a few hundred entries. What should it be?",
+    "choices": [
+      "`absl::btree_map<std::string, double>` for better cache behavior",
+      "It's fine — `std::unordered_map` is standard C++ and well understood",
+      "`std::map<std::string, double>`, since hash maps are banned in Chromium",
+      "`absl::flat_hash_map<std::string, double>`"
+    ],
+    "answer": 3,
+    "explain": "`std::unordered_map`/`set` are banned. Default to `absl::flat_hash_map`/`set`; `base::flat_map` for sorted small/write-once, `std::map` for large frequently-mutated sorted data. `absl::btree_*` is banned too."
+  },
+  {
+    "rule": "CSA-005",
+    "prompt": "You need a hash map where **pointers to keys** must stay valid while the map is mutated. Which container fits Chromium's guidelines?",
+    "choices": [
+      "`absl::node_hash_map`",
+      "`base::flat_map`, wrapping each key in a `std::unique_ptr`",
+      "`absl::btree_map`, because tree nodes never move after insertion",
+      "`std::unordered_map`, since its nodes are separately allocated"
+    ],
+    "answer": 0,
+    "explain": "For key pointer stability use `absl::node_hash_map`/`node_hash_set`; for value stability, wrap values in `std::unique_ptr` inside an `absl::flat_hash_map`. `std::unordered_*` and `absl::btree_*` are banned."
+  },
+  {
+    "rule": "CSA-006",
+    "prompt": "```cpp\nstd::string str;\nvalue->GetAsString(&str);\n```\n\nWhich replacement follows the standard?",
+    "choices": [
+      "`const std::string& str = value->GetString();`",
+      "`base::JSONWriter::Write(*value, &str);`",
+      "`std::string str = value->DebugString();`",
+      "Keep it, but check the `bool` return value of `GetAsString()`"
+    ],
+    "answer": 0,
+    "explain": "`GetAsString()`, `GetAsInteger()` etc. on `base::Value` are deprecated. Use the direct accessors `GetString()`, `GetInt()`, `GetDouble()`."
+  },
+  {
+    "rule": "CSA-007",
+    "prompt": "`value` comes from a server response and might not be a bool:\n\n```cpp\nif (value.GetBool()) {\n  EnableFeature();\n}\n```\n\nWhat's the safe pattern?",
+    "choices": [
+      "Use the older `value.GetAsBoolean(&b)` and check its return value",
+      "It's fine — `GetBool()` simply returns `false` on a type mismatch",
+      "`if (value.GetIfBool().value_or(false)) { ... }`",
+      "Wrap the call in `try { ... } catch (...)` to handle bad input"
+    ],
+    "answer": 2,
+    "explain": "`Get*()` CHECK-fails (crashes) on a type mismatch. When the type may differ, use `GetIfBool`/`GetIfInt`/`GetIfString`, typically with `.value_or(...)`."
+  },
+  {
+    "rule": "CSA-008",
+    "prompt": "```cpp\nstd::string port_str = std::to_string(port);\n```\n\nWhat should this be?",
+    "choices": [
+      "`base::NumberToString(port)`",
+      "`base::StringPrintf(\"%d\", port)`",
+      "Build it with a `std::ostringstream` and `<<`",
+      "Leave it — `std::to_string` is only a problem for floating-point values"
+    ],
+    "answer": 0,
+    "explain": "`std::to_string` is on Chromium's deprecated list; use `base::NumberToString`."
+  },
+  {
+    "rule": "CSA-009",
+    "prompt": "```cpp\ndouble ratio = (double)completed / total;  // both are int\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Nothing — C-style casts are fine for plain arithmetic types",
+      "`static_cast<double>(completed) / total`",
+      "`reinterpret_cast<double>(completed) / total`",
+      "Drop the cast; `completed / total` is promoted to double automatically"
+    ],
+    "answer": 1,
+    "explain": "Chromium prohibits C-style casts. Use explicit C++ casts like `static_cast`, which are safer and searchable."
+  },
+  {
+    "rule": "CSA-010",
+    "prompt": "```cpp\nstd::vector<unsigned char> buffer = BuildData();\nstd::move(cb).Run(buffer, other_arg);\n// buffer is never used again\n```\n\nWhat's the issue?",
+    "choices": [
+      "It copies the whole vector; pass `std::move(buffer)`",
+      "None — the compiler elides the copy because `buffer` is a local",
+      "The callback should receive `buffer.data()` instead of the vector",
+      "Pass a clone explicitly so the ownership transfer is obvious to readers"
+    ],
+    "answer": 0,
+    "explain": "Prefer `std::move` over copying/cloning when you no longer need the original — forgetting it in `.Run()` silently copies the entire buffer."
+  },
+  {
+    "rule": "CSA-011",
+    "prompt": "A PR introduces:\n\n```cpp\nstruct MonthlyStatements {\n  std::vector<MonthlyStatement> statements;\n};\nMonthlyStatements GetMonthlyStatements();\n```\n\nBest review feedback?",
+    "choices": [
+      "Make it a class with a private vector and `begin()`/`end()` accessors",
+      "Drop the wrapper and return `std::vector<MonthlyStatement>`",
+      "Keep it, but add a `using MonthlyStatementList = MonthlyStatements;` alias",
+      "Good — a named plural type documents intent better than a bare vector"
+    ],
+    "answer": 1,
+    "explain": "Don't create plural/container wrapper types when a vector of the singular type works — extra types add complexity without value."
+  },
+  {
+    "rule": "CSA-012",
+    "prompt": "```cpp\nstd::string result;\nbase::JSONWriter::Write(root, &result);\nprefs->SetString(prefs::kMyPref, result);\n```\n\nHow should this structured data be stored?",
+    "choices": [
+      "Split each key into its own separate string pref",
+      "As is — string prefs are the most portable and easiest to migrate",
+      "`prefs->SetDict(prefs::kMyPref, std::move(dict))` (or `SetList`)",
+      "Base64-encode the JSON first so special characters survive"
+    ],
+    "answer": 2,
+    "explain": "Don't serialize to JSON strings for prefs; use the native `SetDict`/`SetList` pref value types."
+  },
+  {
+    "rule": "CSA-013",
+    "prompt": "A header adds:\n\n```cpp\n#define BRAVE_SYNC_URL \"https://sync.brave.com\"\n```\n\nThe value is not passed in from GN. What's preferred?",
+    "choices": [
+      "`#define` it in BUILD.gn `defines` instead of in the header",
+      "`extern const char kBraveSyncUrl[];`, defined in the `.cc`",
+      "Keep the `#define` — it's zero-cost and the prefix avoids collisions",
+      "A global `const std::string kBraveSyncUrl` defined in the header"
+    ],
+    "answer": 1,
+    "explain": "Use `extern const char[]` instead of `#define` for string constants so they're namespaced. The exception is values that must come from GN."
+  },
+  {
+    "rule": "CSA-014",
+    "prompt": "```cpp\n// type must be \"uphold\" or \"gemini\"\nvoid SetWalletType(const std::string& type);\n```\n\nWhat's the better API?",
+    "choices": [
+      "An `enum class WalletType` parameter (with string conversion)",
+      "Add `kUphold`/`kGemini` string constants and keep the `std::string` param",
+      "Keep the string but `DCHECK` that it's one of the allowed values",
+      "Accept an `int` where 0 means Uphold and 1 means Gemini"
+    ],
+    "answer": 0,
+    "explain": "When a value has a fixed set of options, use an enum (with string conversion where needed) — the compiler checks switches and invalid values become impossible."
+  },
+  {
+    "rule": "CSA-015",
+    "prompt": "You're integrating a third-party C++ library whose code uses `throw` and `try/catch` for error handling. What must you verify?",
+    "choices": [
+      "Nothing, as long as you enable `-fexceptions` only for that one target",
+      "That it builds with exception support disabled",
+      "That every call into it from Brave code is wrapped in `try/catch`",
+      "That exceptions never propagate past the library's public API boundary"
+    ],
+    "answer": 1,
+    "explain": "C++ exceptions are disallowed in Chromium. Third-party libraries must build with exceptions disabled."
+  },
+  {
+    "rule": "CSA-016",
+    "prompt": "`items` is a `base::flat_set<Entry>`:\n\n```cpp\nfor (auto it = items.begin(); it != items.end();) {\n  if (it->IsExpired()) it = items.erase(it);\n  else ++it;\n}\n```\n\nWhich replacement follows the standard?",
+    "choices": [
+      "Copy the non-expired entries into a new `flat_set` and swap",
+      "`base::EraseIf(items, [](const auto& e) { return e.IsExpired(); });`",
+      "Keep the loop — iterator-based erase is the most explicit form",
+      "`items.erase(std::remove_if(items.begin(), items.end(), pred), items.end());`"
+    ],
+    "answer": 1,
+    "explain": "Prefer `base::EraseIf` for `base::flat_*` containers (and `std::erase_if` for std containers) over manual erase loops."
+  },
+  {
+    "rule": "CSA-017",
+    "prompt": "```cpp\nvoid ProcessBuffer(const std::vector<uint8_t>& data);  // read-only\n```\n\nCallers hold data in `std::vector`, `base::HeapArray`, and static arrays. Best signature?",
+    "choices": [
+      "`void ProcessBuffer(const uint8_t* data, size_t size);`",
+      "`template <typename C> void ProcessBuffer(const C& data);`",
+      "Keep `const std::vector<uint8_t>&` and convert at each call site",
+      "`void ProcessBuffer(base::span<const uint8_t> data);`"
+    ],
+    "answer": 3,
+    "explain": "Use `base::span<const T>` for read-only parameters — a lightweight non-owning view that accepts any contiguous container."
+  },
+  {
+    "rule": "CSA-018",
+    "prompt": "```cpp\nstd::vector<int> scores(num_players);  // num_players known at runtime\n// scores is filled in but never resized\n```\n\nWhat container best communicates the intent?",
+    "choices": [
+      "`std::array<int, kMaxPlayers>` sized to the largest possible value",
+      "`base::FixedArray<int> scores(num_players);`",
+      "`std::list<int>` so elements never need reallocation",
+      "`std::vector<int>` with a `reserve(num_players)` call"
+    ],
+    "answer": 1,
+    "explain": "When size is known at creation but not at compile time, `base::FixedArray` communicates the fixed size and avoids heap allocation for small sizes."
+  },
+  {
+    "rule": "CSA-019",
+    "prompt": "```cpp\nstd::vector<unsigned char> dat_buffer(size);\nProcessBuffer(dat_buffer.data(), dat_buffer.size());\n```\n\nThis is an owned byte buffer that's never resized. Which version follows the standard?",
+    "choices": [
+      "`auto buf = base::HeapArray<uint8_t>::WithSize(size); ProcessBuffer(buf.as_span());`",
+      "`auto buf = std::make_unique<uint8_t[]>(size); ProcessBuffer(buf.get(), size);`",
+      "`std::vector<uint8_t> buf; buf.reserve(size); ProcessBuffer(buf.data(), size);`",
+      "`std::string buf(size, '\\0'); ProcessBuffer(buf.data(), buf.size());`"
+    ],
+    "answer": 0,
+    "explain": "Use `base::HeapArray<uint8_t>` for fixed-size owned byte buffers: fixed-size semantics, bounds-checked indexing, easy `base::span` conversion. `Uninit(size)` skips zero-init on hot paths."
+  },
+  {
+    "rule": "CSA-020",
+    "prompt": "```cpp\nstd::vector<std::string> names;\nnames.reserve(items.size());\nfor (const auto& item : items) names.push_back(item.name);\n```\n\nWhat's the idiomatic replacement?",
+    "choices": [
+      "`std::vector<std::string> names(items.begin(), items.end());`",
+      "Keep it — the `reserve()` already makes it optimal",
+      "`std::transform` into `std::back_inserter(names)` after `reserve()`",
+      "`auto names = base::ToVector(items, &Item::name);`"
+    ],
+    "answer": 3,
+    "explain": "Use `base::ToVector(range)` (optionally with a projection) for range-to-vector conversions; it handles `reserve()` and iteration for you."
+  },
+  {
+    "rule": "CSA-021",
+    "prompt": "A class stores `std::list<Entry> entries_;`. Entries are appended once, then only iterated front-to-back. What should the reviewer suggest?",
+    "choices": [
+      "Keep `std::list` — linked lists are ideal for sequential traversal",
+      "Use `std::vector<Entry>` (with `reserve()` if the size is known)",
+      "Use `std::set<Entry>` so iteration order is deterministic",
+      "Switch to `std::forward_list` to save one pointer per node"
+    ],
+    "answer": 1,
+    "explain": "Never use `std::list` for pure traversal — poor cache locality. Reserve it for stable iterators or frequent mid-container insert/remove; prefer `std::vector`."
+  },
+  {
+    "rule": "CSA-022",
+    "prompt": "```cpp\n// Pass \"\" to clear the custom title.\nvoid SetCustomTitle(const std::string& title);\n```\n\nWhat's the better API?",
+    "choices": [
+      "Use a reserved value like `\"__unset__\"` so empty titles are allowed",
+      "Keep `\"\"` but define `constexpr char kNoTitle[] = \"\";` for clarity",
+      "`void SetCustomTitle(std::optional<std::string> title);`",
+      "`void SetCustomTitle(const std::string& title, bool has_title);`"
+    ],
+    "answer": 2,
+    "explain": "Never use `\"\"`, `-1` or other magic values as \"no value\" sentinels — use `std::optional<T>` and `nullopt`."
+  },
+  {
+    "rule": "CSA-023",
+    "prompt": "```cpp\nstd::optional<base::ElapsedTimer> elapsed_timer_;\n// ... starting the timer:\nelapsed_timer_ = base::ElapsedTimer();\n```\n\nWhich form is preferred for engaging the optional?",
+    "choices": [
+      "`elapsed_timer_.reset();`",
+      "`elapsed_timer_ = std::optional<base::ElapsedTimer>(base::ElapsedTimer());`",
+      "`elapsed_timer_ = std::make_optional<base::ElapsedTimer>();`",
+      "`elapsed_timer_.emplace();`"
+    ],
+    "answer": 3,
+    "explain": "Prefer `.emplace()` when engaging a `std::optional` member — it states the intent explicitly."
+  },
+  {
+    "rule": "CSA-024",
+    "prompt": "```cpp\nbool GetHistorySize(int* out_size);\n```\n\nHow should this be modernized?",
+    "choices": [
+      "`std::optional<int> GetHistorySize();`",
+      "`std::pair<bool, int> GetHistorySize();`",
+      "`bool GetHistorySize(int& out_size);` to avoid null pointers",
+      "`int GetHistorySize();` returning `-1` when unavailable"
+    ],
+    "answer": 0,
+    "explain": "Return `std::optional<T>` instead of `bool` + out parameter when a value may or may not exist."
+  },
+  {
+    "rule": "CSA-025",
+    "prompt": "In `brave_stats.cc`, which constant definition follows the standard?",
+    "choices": [
+      "`namespace brave_stats { namespace { constexpr int kMaxRetries = 3; } }`",
+      "`namespace brave_stats { namespace { const int kMaxRetries = 3; } }`",
+      "`#define kMaxRetries 3` near the top of the file",
+      "`namespace { constexpr int kMaxRetries = 3; }` above `namespace brave_stats`"
+    ],
+    "answer": 0,
+    "explain": "Compile-time constants in anonymous namespaces should be `constexpr`, not `const`, and live inside the component's namespace."
+  },
+  {
+    "rule": "CSA-026",
+    "prompt": "```cpp\nconst char kScript[] =\n    \"(function() {\\n\"\n    \"  let x = 1;\\n\"\n    \"  return x;\\n\"\n    \"})();\";\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Concatenate the lines with `base::StrCat` instead of adjacent literals",
+      "Build it at runtime by joining a `std::vector<std::string>` of lines",
+      "Use a raw string literal: `R\"( ... )\"`",
+      "Keep it — explicit `\\n` makes the line breaks obvious to reviewers"
+    ],
+    "answer": 2,
+    "explain": "Embed multiline JS, SQL etc. with raw string literals (`R\"()\"`) instead of escaping each line."
+  },
+  {
+    "rule": "CSA-027",
+    "prompt": "```cpp\nvoid ProcessItem(const int& id, const bool& enabled, Foo* const& foo);\n```\n\nWhat should the signature be?",
+    "choices": [
+      "`void ProcessItem(int&& id, bool&& enabled, Foo*&& foo);`",
+      "`void ProcessItem(int id, bool enabled, Foo* foo);`",
+      "`void ProcessItem(const int* id, const bool* enabled, Foo* foo);`",
+      "Keep it — `const&` avoids copying the arguments"
+    ],
+    "answer": 1,
+    "explain": "Pass primitives (`int`, `bool`, `float`, pointers) by value; `const&` only adds indirection."
+  },
+  {
+    "rule": "CSA-028",
+    "prompt": "A new class ends with:\n\n```cpp\n private:\n  DISALLOW_COPY_AND_ASSIGN(MyClass);\n```\n\nWhat's the preferred replacement?",
+    "choices": [
+      "Delete only the copy constructor; assignment then fails automatically",
+      "Keep the macro for consistency with nearby older classes",
+      "Declare the copy constructor private and leave it undefined",
+      "`= delete` the copy constructor and copy assignment"
+    ],
+    "answer": 3,
+    "explain": "`DISALLOW_COPY_AND_ASSIGN` is deprecated. Write `MyClass(const MyClass&) = delete;` and `MyClass& operator=(const MyClass&) = delete;`."
+  },
+  {
+    "rule": "CSA-029",
+    "prompt": "```cpp\nstruct Topic {\n  Topic(Topic&&) = default;\n  Topic& operator=(Topic&&) = default;\n  // ...\n};\nstd::vector<Topic> topics_;\n```\n\nWhat should be added?",
+    "choices": [
+      "Delete the move operations so the vector always copies predictably",
+      "Nothing; just call `topics_.reserve()` so reallocation never happens",
+      "`noexcept` on both move operations",
+      "`explicit` on the move constructor"
+    ],
+    "answer": 2,
+    "explain": "Declare custom move operations `noexcept` for types stored in `std::vector` — otherwise the vector falls back to copying during reallocation."
+  },
+  {
+    "rule": "CSA-031",
+    "prompt": "A function reads an optional string but never stores it. Which parameter type is preferred?",
+    "choices": [
+      "`base::optional_ref<const std::string> value`",
+      "`std::optional<std::reference_wrapper<const std::string>> value`",
+      "`std::optional<std::string>& value`",
+      "`const std::optional<std::string>& value`"
+    ],
+    "answer": 0,
+    "explain": "Never take `std::optional<T>&` — it's confusing and can hide copies. Take `std::optional<T>` by value if storing, or `base::optional_ref<T>` for non-owning access."
+  },
+  {
+    "rule": "CSA-032",
+    "prompt": "```cpp\nbool ShouldDebounce(const GURL& url) {\n  // ...expensive rule matching on url...\n}\n```\n\nIt's called for every navigation, including `chrome://`, `file://` and `data:` URLs. What should be added first?",
+    "choices": [
+      "A cache of results keyed by full URL to amortize the cost",
+      "`DCHECK(url.SchemeIsHTTPOrHTTPS());` to document the assumption",
+      "`if (!url.SchemeIsHTTPOrHTTPS()) return false;`",
+      "`if (!url.is_valid()) return false;` — scheme doesn't matter"
+    ],
+    "answer": 2,
+    "explain": "In URL processing code (shields, debouncing, content settings), short-circuit early on non-HTTP(S) URLs to save work and avoid edge cases."
+  },
+  {
+    "rule": "CSA-033",
+    "prompt": "```cpp\nclass Transaction {\n  uint64_t invalid_after_ = 0;\n public:\n  void set_invalid_after(uint32_t value) { invalid_after_ = value; }\n};\n```\n\nWhat's the reviewer's concern?",
+    "choices": [
+      "The field should be `int64_t` so negative values can be detected",
+      "The setter should `static_cast<uint64_t>(value)` explicitly",
+      "None — widening `uint32_t` to `uint64_t` inside the setter is lossless",
+      "Silent truncation at call sites; make the param `uint64_t`"
+    ],
+    "answer": 3,
+    "explain": "Setter/parameter types must match the field type. A narrower parameter silently truncates at the call site — especially dangerous in wallet/crypto code."
+  },
+  {
+    "rule": "CSA-034",
+    "prompt": "A feature is removed, and its pref `kOldFeatureEnabled` was stored in user profiles. The PR deletes the pref registration and all uses in one go. What should happen instead?",
+    "choices": [
+      "Nothing — unregistered prefs are simply ignored, so deleting is safe",
+      "Register it for clearing for a release, then remove it",
+      "Rename the pref to a new key in the same CL so old values are orphaned",
+      "Keep the pref registered forever in case the feature returns"
+    ],
+    "answer": 1,
+    "explain": "Deprecate prefs before removing them: register the old pref for clearing in one release so stored values are wiped from existing profiles, then fully remove it."
+  },
+  {
+    "rule": "CSA-035",
+    "prompt": "Which of these should a reviewer flag as \"production code modified solely for tests\"?",
+    "choices": [
+      "A thin `GetFeatureForTesting()` accessor exposing an internalized `base::Feature`",
+      "A `Reset()` method that's also used by the production shutdown path",
+      "An early return in production code when the input list is empty",
+      "`if (CHECK_IS_TEST()) { SkipDnsLookup(); }` inside the production resolver"
+    ],
+    "answer": 3,
+    "explain": "Never let test workarounds change production behavior — use test infra like `kHostResolverRules` in `SetUpCommandLine`. Only flag clear signals (`CHECK_IS_TEST()`, `UNIT_TEST`, `_for_testing`); thin `ForTesting()` accessors and defensive logic are fine."
+  },
+  {
+    "rule": "CSA-036",
+    "prompt": "```cpp\nstd::string url = scheme + \"://\" + host + path;\n```\n\nWhich version follows Chromium conventions?",
+    "choices": [
+      "`base::StringPrintf(\"%s://%s%s\", scheme.c_str(), host.c_str(), path.c_str())`",
+      "`base::StrCat({scheme, \"://\", host, path})`",
+      "`base::JoinString({url::kHttpsScheme, host, path}, url::kStandardSchemeSeparator)`",
+      "`base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator, host, path})`"
+    ],
+    "answer": 3,
+    "explain": "Use `url::kStandardSchemeSeparator` instead of hardcoding `\"://\"` when constructing URLs."
+  },
+  {
+    "rule": "CSA-037",
+    "prompt": "```cpp\nservice->DoAsync([](const std::string&) {});\n```\n\nThe caller genuinely doesn't care about the result. What's idiomatic?",
+    "choices": [
+      "`service->DoAsync(base::NullCallback());`",
+      "`service->DoAsync(base::BindOnce([](const std::string&) {}));`",
+      "`service->DoAsync(base::DoNothing());`",
+      "Add an `OnIgnored(const std::string&)` member and bind it with `BindOnce`"
+    ],
+    "answer": 2,
+    "explain": "Use `base::DoNothing()` for no-op callbacks instead of empty lambdas — it's the Chromium idiom and reads clearly."
+  },
+  {
+    "rule": "CSA-038",
+    "prompt": "```cpp\nresult += base::StrCat({kOpenTag, \"\\n\", \"=== METADATA ===\\n\"});\n```\n\nWhat's the better form?",
+    "choices": [
+      "`result = base::StrCat({result, kOpenTag, \"\\n\", \"=== METADATA ===\\n\"});`",
+      "`base::StrAppend(&result, {kOpenTag, \"\\n\", \"=== METADATA ===\\n\"});`",
+      "`result.append(base::StrCat({kOpenTag, \"\\n\", \"=== METADATA ===\\n\"}));`",
+      "`result += absl::StrFormat(\"%s\\n=== METADATA ===\\n\", kOpenTag);`"
+    ],
+    "answer": 1,
+    "explain": "`StrCat` builds a temporary string that is then copied; `base::StrAppend(&str, {...})` appends directly into the target."
+  },
+  {
+    "rule": "CSA-039",
+    "prompt": "```cpp\nfor (auto it = history.crbegin(); it != history.crend(); ++it) {\n  ProcessEntry(*it);\n}\n```\n\nWhich rewrite follows the standard?",
+    "choices": [
+      "Copy `history`, call `std::reverse` on the copy, then loop forward",
+      "Keep the reverse iterators but add a comment explaining the order",
+      "`std::views::reverse(history)` in a range-for, plus a why-comment",
+      "An index loop from `history.size() - 1` down to `0`"
+    ],
+    "answer": 2,
+    "explain": "Prefer `std::views::reverse()` with a range-based for loop over explicit reverse iterators, and always comment why reverse order is needed."
+  },
+  {
+    "rule": "CSA-040",
+    "prompt": "```cpp\nstd::string msg = base::StringPrintf(\"Error %d: %s\", code, desc.c_str());\n```\n\nWhat should it be?",
+    "choices": [
+      "`base::StrCat({\"Error \", std::to_string(code), \": \", desc})`",
+      "Stream `code` and `desc` into a `std::ostringstream`",
+      "Keep `base::StringPrintf` — it's the Chromium-native formatter",
+      "`absl::StrFormat(\"Error %d: %s\", code, desc)`"
+    ],
+    "answer": 3,
+    "explain": "`base::StringPrintf` is being deprecated in favor of `absl::StrFormat` (which also accepts `std::string` directly)."
+  },
+  {
+    "rule": "CSA-041",
+    "prompt": "```cpp\nstd::optional<int64_t> value = GetCount();\nuint64_t result = 0;\nif (value.has_value()) {\n  result = static_cast<uint64_t>(*value);\n}\n```\n\nWhich is the preferred concise and safe form?",
+    "choices": [
+      "`result = base::ClampedNumeric<uint64_t>(*value).RawValue();`",
+      "`result = static_cast<uint64_t>(value.value_or(0));`",
+      "`result = base::saturated_cast<uint64_t>(value.value_or(0));`",
+      "`result = base::checked_cast<uint64_t>(value.value_or(0));`"
+    ],
+    "answer": 2,
+    "explain": "Combine `base::saturated_cast<T>()` with `.value_or(default)` for safe numeric conversion. Use `checked_cast` only when out-of-range is an invariant violation (it CHECK-fails)."
+  },
+  {
+    "rule": "CSA-041",
+    "prompt": "`count` and `item_size` come from untrusted input. Which computes the total safely?",
+    "choices": [
+      "`size_t total = count * item_size; if (total / count != item_size) return std::nullopt;`",
+      "`base::CheckedNumeric<size_t> total = count * item_size; if (!total.IsValid()) return {};`",
+      "`size_t total = base::checked_cast<size_t>(count * item_size);`",
+      "`if (!base::CheckMul(count, item_size).AssignIfValid(&total)) return std::nullopt;`"
+    ],
+    "answer": 3,
+    "explain": "Casting after the fact doesn't help — the naked `count * item_size` overflows first. Use non-member helpers like `base::CheckMul` so every checked operation is explicit."
+  },
+  {
+    "rule": "CSA-042",
+    "prompt": "```cpp\nbool found = false;\nfor (const auto& item : items) {\n  if (item.IsExpired()) { found = true; break; }\n}\n```\n\nWhich replacement is preferred?",
+    "choices": [
+      "`std::ranges::all_of(items, [](const auto& i) { return i.IsExpired(); })`",
+      "`std::ranges::any_of(items, [](const auto& i) { return i.IsExpired(); })`",
+      "`std::count_if(items.begin(), items.end(), pred) > 0`",
+      "Keep the loop; the early `break` already makes it efficient"
+    ],
+    "answer": 1,
+    "explain": "Prefer C++20 `std::ranges::any_of` / `all_of` / `find_if` over manual loops with break conditions."
+  },
+  {
+    "rule": "CSA-043",
+    "prompt": "```cpp\nstd::string truncated = content.substr(0, max_length);\n```\n\nMost `content` strings are already shorter than `max_length`. What's the improvement?",
+    "choices": [
+      "Call `content.reserve(max_length)` before `substr()`",
+      "Use `content.resize(max_length)` on a copy instead",
+      "Only `substr()` when `content.size() > max_length`",
+      "Nothing — `substr()` is a no-op when the string is already short"
+    ],
+    "answer": 2,
+    "explain": "Guard `substr()` with a size check: it always allocates and copies, so for content within the limit, use the original string."
+  },
+  {
+    "rule": "CSA-044",
+    "prompt": "```cpp\nstd::optional<Result> Parse(const std::string& input, std::string* error);\n```\n\nCallers need both the result and the error message on failure. Better signature?",
+    "choices": [
+      "`base::expected<Result, std::string> Parse(const std::string& input);`",
+      "`bool Parse(const std::string& input, Result* out, std::string* error);`",
+      "`Result Parse(const std::string& input);` that throws on failure",
+      "`std::pair<std::optional<Result>, std::string> Parse(const std::string& input);`"
+    ],
+    "answer": 0,
+    "explain": "When a function can fail with error details, return `base::expected<T, E>` — success and error bundled in one value, no out-parameter."
+  },
+  {
+    "rule": "CSA-045",
+    "prompt": "```cpp\nconst std::map<ActionType, std::string> kActionNames = {\n    {ActionType::kSummarize, \"summarize\"},\n    {ActionType::kRewrite, \"rewrite\"},\n};\n```\n\nWhat's the preferred form for this static enum-to-string mapping?",
+    "choices": [
+      "`constexpr auto kActionNames = base::MakeFixedFlatMap<ActionType, std::string_view>({...});`",
+      "`const absl::flat_hash_map<ActionType, std::string_view> kActionNames = {...};` at file scope",
+      "`constexpr auto kActionNames = base::MakeFlatMap<ActionType, std::string_view>({...});`",
+      "`static const base::NoDestructor<std::map<ActionType, std::string>> kActionNames(...)`"
+    ],
+    "answer": 0,
+    "explain": "For compile-time constant enum↔string mappings, use `base::MakeFixedFlatMap` — compile-time verified and more maintainable than runtime maps or switches."
+  },
+  {
+    "rule": "CSA-046",
+    "prompt": "```cpp\nauto value = base::JSONReader::Read(json_str);\nif (!value || !value->is_dict()) return;\nauto& dict = value->GetDict();\n```\n\nThe JSON is always expected to be an object. Better form?",
+    "choices": [
+      "`auto dict = base::test::ParseJsonDict(json_str);`",
+      "`auto* dict = base::JSONReader::Read(json_str)->GetIfDict(); if (!dict) return;`",
+      "`auto dict = base::JSONReader::ReadDict(json_str); if (!dict) return;`",
+      "`auto& dict = base::JSONReader::Read(json_str)->GetDict();`"
+    ],
+    "answer": 2,
+    "explain": "When a JSON string should be a dictionary, use `base::JSONReader::ReadDict()`, which returns `std::optional<base::Value::Dict>` directly."
+  },
+  {
+    "rule": "CSA-047",
+    "prompt": "```cpp\nvoid SetName(std::string&& name) { name_ = std::move(name); }\n```\n\nWhat does the Google style guide prefer for this sink parameter?",
+    "choices": [
+      "`void SetName(const std::string& name) { name_ = name; }`",
+      "Provide both a `const std::string&` and a `std::string&&` overload",
+      "`void SetName(std::string& name) { name_.swap(name); }`",
+      "`void SetName(std::string name) { name_ = std::move(name); }`"
+    ],
+    "answer": 3,
+    "explain": "For parameters moved into the callee, pass by value instead of `T&&` — callers `std::move()` either way and the API is simpler."
+  },
+  {
+    "rule": "CSA-048",
+    "prompt": "A migration function gains:\n\n```cpp\nprofile_prefs->ClearPref(kOldFeaturePref);\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Nothing — `ClearPref` on a missing pref is a harmless no-op",
+      "A comment with the date it was added, e.g. `// Added 2025-01`",
+      "Guard the call behind a feature flag so it can be turned off",
+      "A `TODO(yourname)` comment so people know who to ask"
+    ],
+    "answer": 1,
+    "explain": "Annotate obsolete-pref migration entries with the date they were added (e.g. \"safe to remove after ~3 releases\") so old migrations are easy to clean up."
+  },
+  {
+    "rule": "CSA-049",
+    "prompt": "```cpp\nauto it = metric_configs_.find(metric_name);\nif (it == metric_configs_.end()) {\n  return nullptr;\n}\nreturn &it->second;\n```\n\nWhat's the concise replacement?",
+    "choices": [
+      "`return metric_configs_.contains(metric_name) ? &metric_configs_.at(metric_name) : nullptr;`",
+      "`return &metric_configs_[metric_name];`",
+      "`return &metric_configs_.at(metric_name);`",
+      "`return base::FindOrNull(metric_configs_, metric_name);`"
+    ],
+    "answer": 3,
+    "explain": "Use `base::FindOrNull()` instead of the manual find-and-check-end pattern for map lookups."
+  },
+  {
+    "rule": "CSA-050",
+    "prompt": "```cpp\naccelerator_list.insert(accelerator_list.end(),\n                        brave_accelerators.begin(),\n                        brave_accelerators.end());\n```\n\nWhat's preferred?",
+    "choices": [
+      "A range-based `for` loop calling `push_back()` on each element",
+      "`std::copy(brave_accelerators.begin(), brave_accelerators.end(), std::back_inserter(accelerator_list));`",
+      "`base::Extend(accelerator_list, brave_accelerators);`",
+      "`accelerator_list = base::ToVector(brave_accelerators);`"
+    ],
+    "answer": 2,
+    "explain": "Use `base::Extend(target, source)` to append one collection to another instead of `insert(end, begin, end)`."
+  },
+  {
+    "rule": "CSA-051",
+    "prompt": "In a unit test:\n\n```cpp\nauto value = base::JSONReader::Read(json_str);\nASSERT_TRUE(value);\nASSERT_TRUE(value->is_dict());\nauto* name = value->GetDict().FindString(\"name\");\nASSERT_TRUE(name);\nEXPECT_EQ(*name, \"test\");\n```\n\nWhat's the preferred style?",
+    "choices": [
+      "`EXPECT_THAT(ParseJsonDict(json_str), DictHasValue(\"name\", \"test\"));`",
+      "Parse into a struct with `base::JSONValueConverter` and compare fields",
+      "`EXPECT_EQ(json_str, R\"({\"name\":\"test\"})\");` — compare the raw JSON text directly",
+      "Keep the asserts — each `ASSERT_TRUE` pinpoints the exact failure"
+    ],
+    "answer": 0,
+    "explain": "In tests, use `base::test::ParseJson*()` and the matchers in `base/test/values_test_util.h` — more readable, with better failure messages."
+  },
+  {
+    "rule": "CSA-052",
+    "prompt": "A new entry in `about_flags.cc` should be available everywhere:\n\n```cpp\n{\"brave-my-feature\", ..., kOsDesktop | kOsAndroid}\n```\n\nWhat should the platform mask be?",
+    "choices": [
+      "Leave it as is — iOS doesn't use `about_flags.cc`",
+      "`kOsDesktop | kOsAndroid | kOsIos`, listed explicitly for clarity",
+      "`kOsAll`",
+      "`kOsDesktop`, with Android registered in a separate entry"
+    ],
+    "answer": 2,
+    "explain": "Use `kOsAll` for cross-platform feature flags instead of OR-ing individual platform constants."
+  },
+  {
+    "rule": "CSA-053",
+    "prompt": "```cpp\n// HACK: skip validation for now\nif (ShouldSkipValidation()) return;\n```\n\nThis works around an upstream race condition and should go away later. What should the reviewer require?",
+    "choices": [
+      "Nothing — the `HACK:` prefix already marks it as temporary",
+      "A `TODO(<brave-browser issue URL>)` explaining its removal",
+      "A `TODO(username)` so people know who owns the hack",
+      "Delete the comment so the code doesn't advertise the workaround"
+    ],
+    "answer": 1,
+    "explain": "Temporary workarounds must reference a tracking issue via `TODO(https://github.com/brave/brave-browser/issues/<id>)`, explaining when/why to remove them — otherwise they become permanent debt."
+  },
+  {
+    "rule": "CSA-053",
+    "prompt": "```cpp\n// FooApi::Connect() relies on the receiver sending Ack messages,\n// but the JS bindings don't implement this protocol. Use an explicit\n// timer instead.\nbase::OneShotTimer idle_timer_;\n```\n\nThis is the intended long-term design. Does it need a tracking-issue TODO?",
+    "choices": [
+      "No — it's a permanent design rationale",
+      "No — but it must be reworded to start with `HACK:`",
+      "Yes — but a `TODO(username)` is enough instead of an issue URL",
+      "Yes — any comment mentioning a limitation needs a tracking issue"
+    ],
+    "answer": 0,
+    "explain": "Never require a tracking issue for permanent design decisions. A comment explaining why an alternative wasn't used, when the current code is the long-term solution, is rationale, not a workaround."
+  },
+  {
+    "rule": "CSA-054",
+    "prompt": "```cpp\nauto* name = dict.FindString(\"display_name\");\nauto* url = dict.FindString(\"endpoint_url\");\n// the same keys are read again in two other functions\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Named constants like `constexpr char kDisplayName[]`",
+      "`#define DISPLAY_NAME_KEY \"display_name\"` at the top of the file",
+      "Global `const std::string kDisplayName = \"display_name\";` in the header",
+      "Nothing — inline literals keep the key visible right where it's used"
+    ],
+    "answer": 0,
+    "explain": "Use named constants for JSON property keys rather than inline literals — prevents typos and eases refactoring."
+  },
+  {
+    "rule": "CSA-055",
+    "prompt": "```cpp\nstd::string_view BuildUrl(std::string_view host) {\n  std::string url = base::StrCat({\"https://\", host, \"/api\"});\n  return url;\n}\n```\n\nWhat's wrong, and what's the fix?",
+    "choices": [
+      "The view dangles once `url` is destroyed; return `std::string`",
+      "Make `url` a `static` local so the buffer outlives the call",
+      "Nothing — `std::string` converts to `std::string_view` safely",
+      "Return `url.c_str()` so the pointer stays valid after return"
+    ],
+    "answer": 0,
+    "explain": "Never return `std::string_view` from a function that builds a string — it points into a destroyed temporary. Return `std::string` (or `std::optional<std::string>`)."
+  },
+  {
+    "rule": "CSA-056",
+    "prompt": "```cpp\nenum { kBravePolicySource = 10 };\n```\n\nWhat's preferred?",
+    "choices": [
+      "`enum class PolicySource { kBrave = 10 };`",
+      "`#define BRAVE_POLICY_SOURCE 10`",
+      "`const int kBravePolicySource = 10;` declared in the header",
+      "`constexpr int kBravePolicySource = 10;`"
+    ],
+    "answer": 3,
+    "explain": "For a single numeric constant, use `constexpr int` — enums are for sets of related values."
+  },
+  {
+    "rule": "CSA-057",
+    "prompt": "```cpp\nstd::string GetProfileId(const std::string& profile_path);\n```\n\nHow should the parameter be typed?",
+    "choices": [
+      "`std::string_view profile_path`",
+      "`const std::u16string& profile_path` for Windows compatibility",
+      "`const GURL& profile_path` using a `file://` URL",
+      "`const base::FilePath& profile_path`"
+    ],
+    "answer": 3,
+    "explain": "File system paths should be `base::FilePath`, not `std::string` — type-safe, simpler call sites, self-documenting."
+  },
+  {
+    "rule": "CSA-058",
+    "prompt": "```cpp\nenum class SidebarItem {\n  kBookmarks,\n#if BUILDFLAG(ENABLE_BRAVE_TALK)\n  kTalk,\n#endif\n  kHistory,\n};\n```\n\nThese values are persisted to prefs. What's the fix?",
+    "choices": [
+      "Add a `kMaxValue = kHistory` entry at the end of the enum",
+      "Nothing — enum values are resolved at compile time per build",
+      "Change `enum class` to a plain `enum` so values are stable",
+      "Explicit values: `kBookmarks = 0`, `kTalk = 1`, `kHistory = 2`"
+    ],
+    "answer": 3,
+    "explain": "When enum members are conditionally compiled out, assign explicit values to the rest so they don't shift and break serialization, persistence or IPC."
+  },
+  {
+    "rule": "CSA-059",
+    "prompt": "A header declares:\n\n```cpp\nvoid OnSubmitSignedExtrinsic(std::optional<std::string>,\n                             std::optional<std::string>);\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Replace the second parameter with an out-parameter to disambiguate",
+      "Name both parameters, matching the `.cc`",
+      "Nothing — the `.cc` definition already names them",
+      "Add a comment above the declaration describing the two arguments"
+    ],
+    "answer": 1,
+    "explain": "Always name parameters in header declarations, matching the `.cc` — especially when the types alone are ambiguous."
+  },
+  {
+    "rule": "CSA-060",
+    "prompt": "```cpp\nstruct ContentSite {\n  std::string name_;\n  int percentage_ = 0;\n};\n```\n\nWhat naming should the fields use?",
+    "choices": [
+      "`m_name` and `m_percentage`",
+      "`name` and `percentage`",
+      "Keep `name_` and `percentage_` — all members use trailing underscores",
+      "`name_` but expose it through a `name()` getter"
+    ],
+    "answer": 1,
+    "explain": "Trailing underscores are for class member variables, not plain struct fields."
+  },
+  {
+    "rule": "CSA-062",
+    "prompt": "New code uses `uint32_t hash = base::Hash(str);`. You think `base::Hash` is deprecated. What's the correct reviewer process?",
+    "choices": [
+      "Flag it — you remember it being deprecated years ago",
+      "Approve if it compiles; deprecated APIs still work until they're removed",
+      "Approve — existing callers use it, so one more use is consistent",
+      "Confirm the notice in its header, then request the replacement"
+    ],
+    "answer": 3,
+    "explain": "Never introduce new uses of deprecated APIs — but verify the deprecation notice in the actual header first; never flag based on memory (here, replace with `base::FastHash(base::as_byte_span(str))`)."
+  },
+  {
+    "rule": "CSA-063",
+    "prompt": "In a header:\n\n```cpp\nstruct TopicArticle {\n  int id;\n  double score;\n  std::string title;\n};\n```\n\nWhat should change?",
+    "choices": [
+      "`int id = 0;` and `double score = 0.0;`",
+      "Wrap `id` and `score` in `std::optional` to mark them unset",
+      "Nothing — callers always set every field before reading it",
+      "Add a constructor that zeroes the struct with `memset`"
+    ],
+    "answer": 0,
+    "explain": "POD members in header-declared structs/classes must be explicitly default-initialized; reading an uninitialized POD is undefined behavior."
+  },
+  {
+    "rule": "CSA-064",
+    "prompt": "```cpp\nstd::string_view GetDomain(const char* env_from_switch);\n```\n\nCallers pass `std::string`s and literals. Best parameter type?",
+    "choices": [
+      "`std::string_view env_from_switch`",
+      "Keep `const char*` and add a `size_t len` parameter",
+      "`std::string env_from_switch` by value",
+      "`const std::string& env_from_switch`"
+    ],
+    "answer": 0,
+    "explain": "Prefer `std::string_view` over `const char*` for string parameters — it accepts `std::string`, `const char*` and literals, and carries the size."
+  },
+  {
+    "rule": "CSA-065",
+    "prompt": "Which `std::string_view` **class member** is safe and should NOT be flagged as a lifetime bug?",
+    "choices": [
+      "`std::string_view host_;` in a long-lived service, set from `url.host()` of a local GURL",
+      "`std::string_view pref_path_;` initialized from `prefs::kMyPref` (`inline constexpr char[]`)",
+      "`std::string_view name_;` in a singleton, set from a `GetUserName()` `std::string` return",
+      "`Config(std::string_view name) : name_(name) {}` where callers may pass temporaries"
+    ],
+    "answer": 1,
+    "explain": "`string_view` members are dangerous in general, but those initialized from static-lifetime data (pref-key constants, string literals, `kFeatureName`) are safe. Check the initializer before flagging."
+  },
+  {
+    "rule": "CSA-066",
+    "prompt": "```cpp\nstd::deque<Request> pending_;\nstd::stack<Frame> history_;\n```\n\nWhat should these be?",
+    "choices": [
+      "`std::vector<Request>` (erasing from the front) and `std::stack<Frame>`",
+      "`std::list<Request>` and `std::vector<Frame>`",
+      "`base::circular_deque<Request>` and `base::stack<Frame>`",
+      "Keep them — they're standard containers with well-known behavior"
+    ],
+    "answer": 2,
+    "explain": "Use `base::circular_deque` / `base::queue` / `base::stack` instead of the std versions — consistent memory use across platforms and smaller code size."
+  },
+  {
+    "rule": "CSA-067",
+    "prompt": "```cpp\nint count = static_cast<int>(vec.size());\nfor (int i = 0; i < static_cast<int>(vec.size()); ++i) { ... }\n```\n\nWhat type should `count` and `i` be?",
+    "choices": [
+      "Keep `int`, but use `base::checked_cast<int>` instead of `static_cast`",
+      "`size_t`",
+      "`int64_t`, to avoid any overflow",
+      "`uint32_t`, which is enough and smaller"
+    ],
+    "answer": 1,
+    "explain": "Use `size_t` for sizes, counts, offsets and indices — it avoids needless casts against STL APIs. Public APIs use `size_t` even if internals use `uint32_t`."
+  },
+  {
+    "rule": "CSA-068",
+    "prompt": "```cpp\nbase::flat_map<std::string, int> map;\n// hot path:\nint val = map[\"key\"];\n```\n\nHow should the lookup be written?",
+    "choices": [
+      "Switch to `std::map` so lookups don't allocate",
+      "`auto it = map.find(\"key\");`",
+      "`int val = map.at(std::string(\"key\"));`",
+      "`static const std::string kKey = \"key\"; int val = map[kKey];`"
+    ],
+    "answer": 1,
+    "explain": "`base::flat_map`/`flat_set` support transparent comparison: `find()` with `std::string_view` or `const char*` avoids building a temporary `std::string`; `operator[]` doesn't."
+  },
+  {
+    "rule": "CSA-069",
+    "prompt": "```cpp\nstd::vector<uint8_t> data = GetBytes();\nbase::ReadUnicodeCharacter(\n    reinterpret_cast<const char*>(data.data()), &i, &code_point);\n```\n\n`ReadUnicodeCharacter` now takes a `std::string_view`. What's the issue?",
+    "choices": [
+      "None — `data.data()` is contiguous, so the conversion is safe",
+      "Use `static_cast` instead of `reinterpret_cast` for the pointer",
+      "Hidden `strlen()` on non-null-terminated data; use `base::as_string_view(data)`",
+      "`std::string_view(reinterpret_cast<const char*>(data.data()))` makes it explicit"
+    ],
+    "answer": 2,
+    "explain": "When building a `string_view` from byte buffers, always pass the size: implicit `const char*` conversion runs `strlen()`, which is UB on non-null-terminated data."
+  },
+  {
+    "rule": "CSA-070",
+    "prompt": "A Rust → C++ cxx bridge for logging:\n\n```rust\nunsafe extern \"C++\" {\n    fn log_event(name: &CxxString);\n}\n```\n\nC++ only reads the name for logging. Better type?",
+    "choices": [
+      "`fn log_event(name: Box<Vec<u8>>);` for zero-copy",
+      "Keep `&CxxString` — it's the native C++ string type",
+      "`fn log_event(name: String);` so C++ owns the text",
+      "`fn log_event(name: &str);` (maps to `rust::Str`)"
+    ],
+    "answer": 3,
+    "explain": "For read-only text across FFI, use `&str` / `rust::Str` — a zero-copy borrow. `&CxxString` forces C++ container overhead for a mere borrow."
+  },
+  {
+    "rule": "CSA-070",
+    "prompt": "```cpp\nclass Reporter {\n  rust::String last_report_;\n};\nvoid Reporter::Refresh() { last_report_ = ffi::build_report(); }\n```\n\nWhat should the reviewer request?",
+    "choices": [
+      "Deep-copy into a `std::string` member at the boundary",
+      "Store a `rust::Str` view instead to avoid any copies",
+      "Switch `build_report()` to return `&str` so C++ can keep the reference",
+      "Nothing — `rust::String` is a fine member type for owned text"
+    ],
+    "answer": 0,
+    "explain": "Never store `rust::String` as a class member — it ties the class to Rust's allocator and bridge layout. Deep-copy into `std::string` to keep text past the FFI call."
+  },
+  {
+    "rule": "CSA-071",
+    "prompt": "Cross-platform UI code:\n\n```cpp\nstd::wstring title = L\"Brave\";\n```\n\nWhat should it be?",
+    "choices": [
+      "Fine — `wchar_t` is 16-bit, which matches Chromium's UTF-16",
+      "`std::u16string title = u\"Brave\";`",
+      "`std::basic_string<uint16_t> title = {'B','r','a','v','e'};`",
+      "`std::wstring title = u\"Brave\";` with the UTF-16 literal prefix"
+    ],
+    "answer": 1,
+    "explain": "Chromium uses UTF-16 via `std::u16string`/`char16_t*` and `u\"...\"` literals. `std::wstring`/`wchar_t*` are only for Windows-only code."
+  },
+  {
+    "rule": "CSA-071",
+    "prompt": "You need a bullet character (U+2022) in a `std::u16string`. Which literal is correct?",
+    "choices": [
+      "`u\"\\U2022\"`",
+      "`u\"\\xe2\\x80\\xa2\"`",
+      "`base::UTF8ToUTF16(\"\\xe2\\x80\\xa2\")` stored alongside the UTF-8 form",
+      "`u\"\\u2022\"`"
+    ],
+    "answer": 3,
+    "explain": "For non-ASCII in UTF-16 literals use the literal character or a `\\uXXXX`/`\\UXXXXXXXX` escape — never `\\xXX` byte escapes, which silently produce wrong code units."
+  }
+]

@@ -1,0 +1,889 @@
+[
+  {
+    "rule": "CS-001",
+    "prompt": "Reviewing a new header:\n\n```cpp\n// foo_service.h\n#include \"base/memory/ref_counted.h\"\n\nclass FooService {\n  std::string name_;\n};\n```\n\nIt compiles because `ref_counted.h` happens to pull in `<string>`. What should you say?",
+    "choices": [
+      "Fine — it compiles, and `ref_counted.h` is a stable base header",
+      "Forward-declare `std::string` to keep the header lean",
+      "Move the `std::string` member into a pimpl in the `.cc` file",
+      "Add `#include <string>` directly to `foo_service.h` itself"
+    ],
+    "answer": 3,
+    "explain": "Include what you use. Transitive includes can change at any time and break your code. Also remove includes you don't actually use."
+  },
+  {
+    "rule": "CS-001",
+    "prompt": "A unit test uses `net::MockHostResolver` and includes `net/dns/mock_host_resolver.h`, but not `net/dns/host_resolver.h`, which is private to `//net/dns:host_resolver` in GN. A review bot flags a missing include for `host_resolver.h`. Is the flag correct?",
+    "choices": [
+      "Yes — include what you use means a header for every type you touch",
+      "No — the exported mock header is the right include here",
+      "Yes — add the test target to the `friend` list so the include is allowed",
+      "No — test files are exempt from include-what-you-use entirely"
+    ],
+    "answer": 1,
+    "explain": "GN-private headers are an exception: include the header the owner exports for that purpose, such as `mock_*.h` or `*_test_util.h`. Never flag the missing private include in review."
+  },
+  {
+    "rule": "CS-003",
+    "prompt": "You're adding a pref and an accessor that control whether Tor is available. Which pair should you choose?",
+    "choices": [
+      "`kTorEnabled` / `IsTorEnabled()`",
+      "`kTorDisabled` / `IsTorDisabled()`",
+      "`kTorDisabled` / `IsTorEnabled()`",
+      "`kDisableTor` / `ShouldDisableTor()`"
+    ],
+    "answer": 0,
+    "explain": "Use the positive form (\"Enabled\", not \"Disabled\") for booleans, prefs and methods. Negatives make conditions like `!IsTorDisabled()` harder to read."
+  },
+  {
+    "rule": "CS-004",
+    "prompt": "C++ exposes `IsTorDisabledManaged()` while the settings JS calls `getTorManaged()` for the same concept. Best fix?",
+    "choices": [
+      "Keep both — each layer follows its own conventions",
+      "`IsTorDisabledManaged()` in C++ and `isTorDisabledManaged()` in JS",
+      "`IsTorManaged()` in C++ and `isTorManaged()` in JS",
+      "`GetTorManaged()` in C++ and `getTorManaged()` in JS"
+    ],
+    "answer": 2,
+    "explain": "Use one name for a concept everywhere: C++, JS, prefs and UI. `IsTorManaged` / `isTorManaged` is consistent and also uses the positive form."
+  },
+  {
+    "rule": "CS-005",
+    "prompt": "You're adding a bool query for whether to show the branded wallpaper, plus a function that records a P3A histogram for daily savings. Which declarations follow the conventional prefixes?",
+    "choices": [
+      "`bool GetShouldShowBrandedWallpaper();` and `void SendSavingsDaily();`",
+      "`bool ShouldShowBrandedWallpaper();` and `void RecordSavingsDaily();`",
+      "`bool IsShowBrandedWallpaper();` and `void ReportSavingsDaily();`",
+      "`bool GetShowBrandedWallpaper();` and `void RecordSavingsDaily();`"
+    ],
+    "answer": 1,
+    "explain": "Use `Should*` for bool queries (not `Get*`), `Record*` for histogram/P3A recording, and `Load*`/`Save*` pairs for persistence."
+  },
+  {
+    "rule": "CS-006",
+    "prompt": "`bool IsBraveCommandIds(int id);` checks whether a single command id belongs to Brave. Your review?",
+    "choices": [
+      "Fine — it's checked against a set of ids, so the plural fits",
+      "Rename to `AreBraveCommandIds(int id)`",
+      "Rename to `CheckBraveCommandIds(int id)`",
+      "Rename to `IsBraveCommandId(int id)`"
+    ],
+    "answer": 3,
+    "explain": "Names should be grammatically correct. A function that takes one id and asks \"is it a Brave command id?\" is `IsBraveCommandId`."
+  },
+  {
+    "rule": "CS-007",
+    "prompt": "You're creating a brand-new, Brave-only service for webcompat reports. It doesn't subclass anything from Chromium. What name and file should it get?",
+    "choices": [
+      "`WebcompatReporterService` in `webcompat_reporter_service.h`",
+      "`BraveWebcompatReporterService` in `brave_webcompat_reporter_service.h`",
+      "`BraveWebcompatReporterService` in `webcompat_reporter_service.h`",
+      "`WebcompatReporterService` in `brave_webcompat_reporter.h`"
+    ],
+    "answer": 0,
+    "explain": "Only use the `Brave*` prefix when overriding or subclassing a Chromium class, like `BraveOmniboxClientImpl`. The filename should match the class name."
+  },
+  {
+    "rule": "CS-008",
+    "prompt": "A function shows the first-launch notification only if it hasn't been shown before and a pref allows it. Best name?",
+    "choices": [
+      "`ShowFirstLaunchNotification()`",
+      "`ShouldShowFirstLaunchNotification()`",
+      "`MaybeShowFirstLaunchNotification()`",
+      "`FirstLaunchNotification()`"
+    ],
+    "answer": 2,
+    "explain": "Use the `Maybe*` prefix for functions that conditionally perform an action. `Show*` sounds unconditional, and `Should*` is a query, not an action."
+  },
+  {
+    "rule": "CS-009",
+    "prompt": "```cpp\nbool isTorDisabled = false;\nstd::string userName;\n```\n\nWhat should these C++ variables be called?",
+    "choices": [
+      "Leave them — camelCase is fine for locals; snake_case is only for members",
+      "`is_tor_disabled` and `user_name`",
+      "`IsTorDisabled` and `UserName`",
+      "`kIsTorDisabled` and `kUserName`"
+    ],
+    "answer": 1,
+    "explain": "C++ variables use snake_case. CamelCase is reserved for class and method names."
+  },
+  {
+    "rule": "CS-010",
+    "prompt": "In review you notice a `.cc` file's `#include` lines aren't in canonical order. What should you do?",
+    "choices": [
+      "Request a reorder before approving, since order can affect builds",
+      "Leave a `nit:` asking for canonical order, without blocking",
+      "Ask the author to put Brave includes before Chromium includes",
+      "Don't comment on it — formatting tooling handles include order"
+    ],
+    "answer": 3,
+    "explain": "Never enforce include order in code review, because tooling handles it. For the rest of the basic style: opening braces go on the previous line (K&R), and continuation lines are indented 4 spaces."
+  },
+  {
+    "rule": "CS-011",
+    "prompt": "You copy `chrome/browser/foo/bar.cc` (`Copyright 2019 The Chromium Authors`) into brave-core and modify it. What should the copyright header be?",
+    "choices": [
+      "Keep the Chromium copyright notice with its original 2019 year",
+      "Replace it with the Brave copyright header and the current year",
+      "Keep the Chromium notice but bump the year to the current year",
+      "Switch to the Brave header once more than half the lines have changed"
+    ],
+    "answer": 0,
+    "explain": "Never put Brave's copyright on copied or derived Chromium code; keep their notice. Don't bump existing copyright years."
+  },
+  {
+    "rule": "CS-012",
+    "prompt": "An AI assistant creates a new file and copies the header from a neighbor: `Copyright (c) 2023 The Brave Authors`. The PR is being written today. What should the year be?",
+    "choices": [
+      "Keep 2023 — matching the neighbor keeps headers consistent",
+      "The year the feature work started, per the tracking issue",
+      "The current year, taken from the system date at creation",
+      "A range such as `2023-present`, covering both years"
+    ],
+    "answer": 2,
+    "explain": "New files use the current year. Get it from the system date, not from memory or training data, and never copy old years from other files."
+  },
+  {
+    "rule": "CS-013",
+    "prompt": "Which of these member functions may stay defined inline in a header?",
+    "choices": [
+      "`static bool HandleURL(const GURL& url) { return url.scheme() == \"rewards\"; }`",
+      "`bool is_enabled() const { return is_enabled_; }`",
+      "`virtual bool IsEnabled() const { return enabled_; }`",
+      "`void Shutdown() { observers_.Clear(); prefs_ = nullptr; }`"
+    ],
+    "answer": 1,
+    "explain": "Move method definitions to `.cc` files. Simple `snake_case()` accessors are the exception and can stay inline. Never declare a `virtual` function inline."
+  },
+  {
+    "rule": "CS-014",
+    "prompt": "```cpp\n// my_class.h\n#include \"components/foo/bar.h\"\n\nclass MyClass {\n  raw_ptr<foo::Bar> bar_;\n};\n```\n\n`foo::Bar` is only used as a pointer here. What should the reviewer suggest?",
+    "choices": [
+      "Nothing — including it in the header guarantees the type is complete everywhere",
+      "Swap to a smaller header that transitively provides `Bar`",
+      "Change the member to `std::unique_ptr<foo::Bar>` so the include can be dropped",
+      "Forward-declare `foo::Bar` in the header; include `bar.h` in the `.cc`"
+    ],
+    "answer": 3,
+    "explain": "In headers, forward-declare types used only as pointers or references, and move the full `#include` to the `.cc` file."
+  },
+  {
+    "rule": "CS-014",
+    "prompt": "A WebUI controller header includes `ui/webui/mojo_web_ui_controller.h` (its base class) and takes a `content::WebUI*` in its constructor. `content::WebUI` comes in transitively through that base header. A reviewer suggests adding `namespace content { class WebUI; }`. Is that worth it?",
+    "choices": [
+      "No — it already arrives via the required base-class header",
+      "Yes — every pointer-only type should be forward-declared, no exceptions",
+      "Yes — and forward-declare the base class too, so its include can go",
+      "Yes — and also add an explicit `web_ui.h` include for include-what-you-use"
+    ],
+    "answer": 0,
+    "explain": "Never suggest forward declarations for types that come transitively through a required base-class header, or for base classes themselves, which can't be forward-declared."
+  },
+  {
+    "rule": "CS-015",
+    "prompt": "```cpp\nclass MyClass {\n private:\n  int value_ = 0;\n  friend class MyClassTest;\n};\n```\n\nWhere should the `friend` declaration go?",
+    "choices": [
+      "At the very top of the class, before `public:`, so it's visible",
+      "At the end of the `private:` section, after all members",
+      "Immediately after `private:`, before any member declarations",
+      "In its own `protected:` section at the bottom of the class"
+    ],
+    "answer": 2,
+    "explain": "`friend` statements go immediately after the `private:` access specifier, not buried among members."
+  },
+  {
+    "rule": "CS-016",
+    "prompt": "```cpp\n// foo.cc\nnamespace {\nstatic constexpr int kMaxRetries = 3;\n}  // namespace\n\nstatic void InternalHelper() { ... }\n```\n\nWhat should change?",
+    "choices": [
+      "Nothing — both already have internal linkage, which is all that matters",
+      "Drop `static` in the namespace; move `InternalHelper` into it",
+      "Move both into the header so unit tests can reach them",
+      "Keep `static` on both and remove the redundant anonymous namespace"
+    ],
+    "answer": 1,
+    "explain": "Put code that's internal to a `.cc` file in an anonymous namespace, not `static`. Inside that namespace `static` is redundant, so write plain `constexpr`."
+  },
+  {
+    "rule": "CS-017",
+    "prompt": "A header declares `Init()`, `Shutdown()` and `OnPrefChanged()` in that order, and the class overrides methods from both `KeyedService` and `PrefObserver`. Which layout matches the standard?",
+    "choices": [
+      "Define the methods alphabetically in the `.cc`, and group overrides by return type in the header",
+      "Define them in any order in the `.cc`, and list all overrides in one unlabeled block",
+      "Define overrides first in the `.cc`, then the rest in declaration order",
+      "Follow `.h` order in the `.cc`; label override groups per parent class"
+    ],
+    "answer": 3,
+    "explain": "Definitions in the `.cc` follow the declaration order in the `.h`. In the header, group overrides within each access section, with one labeled group per parent class."
+  },
+  {
+    "rule": "CS-018",
+    "prompt": "You need five new P3A recording methods. The natural home is `RewardsServiceImpl`, which is already about 5000 lines. Best approach?",
+    "choices": [
+      "Put them in a focused helper file that the service calls into",
+      "Add them to `RewardsServiceImpl` next to related code so they're easy to find",
+      "Add them at the end of `RewardsServiceImpl` under a `// P3A` banner comment",
+      "Add them as lambdas inside the existing methods that trigger them"
+    ],
+    "answer": 0,
+    "explain": "Don't keep dumping code into already-large files. Smaller focused helper files and targets read better, cause fewer rebase conflicts and make dependencies easier to track."
+  },
+  {
+    "rule": "CS-019",
+    "prompt": "```cpp\n// Previously this used a raw pointer, now using unique_ptr.\n// Changed from std::map to base::flat_map per review feedback.\nbase::flat_map<std::string, int> lookup_;\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — it records why the code looks this way for future readers",
+      "Move these notes into the header so they're more visible",
+      "Remove the history; describe only what the current code does",
+      "Add the PR number so readers can find the review discussion"
+    ],
+    "answer": 2,
+    "explain": "Comments must make sense to someone reading the code fresh. Comments are not a changelog, so never reference removed code, prior behavior or the change itself."
+  },
+  {
+    "rule": "CS-021",
+    "prompt": "```cpp\nif (!parent_hash) return std::nullopt;\nif (!state_root) return std::nullopt;\nif (!number) return std::nullopt;\n```\n\nThe reasons for each check aren't obvious. What should the author do?",
+    "choices": [
+      "Collapse them into one `if (!a || !b || !c)` with no comments",
+      "Comment each branch briefly with what it guards",
+      "Replace each check with a `CHECK`, since they shouldn't happen",
+      "Add one summary comment at the top, e.g. `// Validate inputs.`"
+    ],
+    "answer": 1,
+    "explain": "When a function has several non-obvious early-return failure branches, put a brief comment before each one saying what it guards, e.g. \"State root validates the block's state trie.\""
+  },
+  {
+    "rule": "CS-022",
+    "prompt": "Where should the comment describing what `kBraveWorkaroundNewWindowFlash` does live?",
+    "choices": [
+      "In `my_features.h`, above `BASE_DECLARE_FEATURE`",
+      "In both the `.h` and the `.cc`, kept in sync",
+      "Only in the `about:flags` description string",
+      "In `my_features.cc`, above `BASE_FEATURE`"
+    ],
+    "answer": 3,
+    "explain": "Comments explaining a `base::Feature` go in the `.cc` file where the feature is defined, not in the header."
+  },
+  {
+    "rule": "CS-023",
+    "prompt": "You add `if (!x) return;` to work around an upstream Chromium bug. What else should you do?",
+    "choices": [
+      "Link the crbug in a comment and file details on the upstream bug",
+      "Add a `// HACK(username)` comment so it's greppable during cleanup",
+      "Describe the bug in a comment, but don't link external trackers because links rot",
+      "Nothing — a null check is self-explanatory and needs no comment"
+    ],
+    "answer": 0,
+    "explain": "Link the upstream issue in a code comment and file details upstream. Then the workaround can be removed when the fix lands."
+  },
+  {
+    "rule": "CS-024",
+    "prompt": "A filter file entry reads:\n\n```\n# Same root cause as the test above\n-BrowserTest.SomeOtherTest\n```\n\nWhat should change?",
+    "choices": [
+      "Nothing — the entries are adjacent, so the reference is clear",
+      "Change it to `as the previous entry` to be less ambiguous",
+      "Name the related test explicitly, e.g. `BrowserTest.FirstTest`",
+      "Change it to `as the test below` and reorder the entries"
+    ],
+    "answer": 2,
+    "explain": "Don't use positional words like \"above\" or \"below\" in comments, because someone may insert code in between. Refer to the item by name."
+  },
+  {
+    "rule": "CS-025",
+    "prompt": "```cpp\nDCHECK(g_browser_process);\nDCHECK(browser_context);  // can never be null here\n```\n\nWhat's the right change?",
+    "choices": [
+      "Both are fine — `DCHECK` documents invariants at no release cost",
+      "Drop the `g_browser_process` one; make the other a `CHECK`",
+      "Turn both into `CHECK`s so release builds enforce them",
+      "Replace both with `if (!x) return;` to fail gracefully"
+    ],
+    "answer": 1,
+    "explain": "Use `CHECK`, not `DCHECK`, for conditions that should never happen in any build. Skip pointless checks like `g_browser_process`, because the browser couldn't run without it."
+  },
+  {
+    "rule": "CS-026",
+    "prompt": "The `type` string comes from parsed server data:\n\n```cpp\nmojom::AdType ToMojomAdType(const std::string& type) {\n  if (type == \"inline\") return mojom::AdType::kInline;\n  if (type == \"popup\") return mojom::AdType::kPopup;\n  NOTREACHED();\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Nothing — `NOTREACHED()` documents the unexpected case",
+      "Use `DCHECK(false)` so release builds don't crash",
+      "Keep `NOTREACHED()` and add a fallback `return mojom::AdType::kUndefined;` after it",
+      "Return `std::optional<mojom::AdType>` and `std::nullopt` for unknown values"
+    ],
+    "answer": 3,
+    "explain": "`NOTREACHED()` crashes the browser, so use it only for real invariants. For bad data, return `std::nullopt` or a default value. `NOTREACHED()` is fatal and the code after it is dead, so a fallback return there is pointless."
+  },
+  {
+    "rule": "CS-027",
+    "prompt": "```cpp\nstd::optional<std::string> db_value = LoadFromDatabase(key);\nCHECK(db_value.has_value());\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Log the failure and return `std::nullopt` to the caller",
+      "Fine — a missing value means corruption, so crashing is safest",
+      "Downgrade to `DCHECK` so only developers crash",
+      "Use `CHECK(db_value.has_value(), base::NotFatalUntil::M140)` permanently"
+    ],
+    "answer": 0,
+    "explain": "`CHECK` only conditions fully within the code's control. Data from databases, user input or other external sources needs graceful error handling, because a `CHECK` failure crashes the user's browser."
+  },
+  {
+    "rule": "CS-028",
+    "prompt": "`bool ImportBookmarks(const base::FilePath& path);` can fail because the file is missing, malformed or too large, and callers want to show a different message for each. Best signature change?",
+    "choices": [
+      "Keep `bool` and log the reason internally",
+      "Keep `bool` and add a `std::string* error_out` parameter",
+      "Return an enum result code describing the outcome",
+      "Throw an exception carrying the reason"
+    ],
+    "answer": 2,
+    "explain": "Return result codes (enums) rather than `bool` from operations that can fail. They carry extra error information and are more future-proof."
+  },
+  {
+    "rule": "CS-029",
+    "prompt": "A class has this member:\n\n```cpp\nbase::expected<ChainMetadata, std::string> chain_metadata_;\n```\n\nThe error string is never shown anywhere. What should change?",
+    "choices": [
+      "Nothing — keeping the error around may help future debugging",
+      "Handle the error where it occurs; keep `std::optional<ChainMetadata>`",
+      "Use `std::variant<ChainMetadata, std::string>` to make both states explicit",
+      "Store the error in a separate `last_error_` member for diagnostics"
+    ],
+    "answer": 1,
+    "explain": "Don't store error state. Handle or log the error at the point of failure, and keep only the success type."
+  },
+  {
+    "rule": "CS-030",
+    "prompt": "```cpp\nclass MyObserver : public TabStripModelObserver {\n  void OnTabStripModelChanged(...) override {}\n  void OnTabGroupChanged(...) override { Update(); }\n};\n```\n\nWhat should happen to `OnTabStripModelChanged`?",
+    "choices": [
+      "Add an `// Intentionally empty.` comment to the body",
+      "Add `NOTREACHED()` to the body",
+      "Keep it so readers can see the event was considered",
+      "Remove the override entirely"
+    ],
+    "answer": 3,
+    "explain": "If an override doesn't implement any behavior, don't define it at all."
+  },
+  {
+    "rule": "CS-031",
+    "prompt": "A Chromium patch adds:\n\n```diff\n+SignBinaries(params);\n+CopyPreSignedBinaries(params);\n```\n\nThese two calls always happen together. What should the reviewer suggest?",
+    "choices": [
+      "Combine them into one method so the patch is one line",
+      "Fine — two explicit calls are clearer than a wrapper",
+      "Put both calls on one line, separated by `;`, to shrink the diff",
+      "Add a comment in the patch reminding callers to call both"
+    ],
+    "answer": 0,
+    "explain": "Combine methods that are always called in sequence. That shrinks patches and stops callers from forgetting one of the calls."
+  },
+  {
+    "rule": "CS-032",
+    "prompt": "```cpp\nvoid RewardsService::SavePendingContribution(...) {\n  SaveToDB(...);\n  GetPendingContributionsTotal();  // refresh the UI\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Fine — the service owns the data, so it should push totals to the UI",
+      "Have the service call the WebUI handler directly to skip a round trip",
+      "Notify observers and let the UI query the total itself",
+      "Have the UI poll the total on a short timer to stay current"
+    ],
+    "answer": 2,
+    "explain": "The service layer shouldn't make queries to update UI. Fire observer notifications and let the UI layer respond."
+  },
+  {
+    "rule": "CS-033",
+    "prompt": "`MyClass::GetDefaultPath()` has a completely different implementation on Android, currently written as a 40-line `#if BUILDFLAG(IS_ANDROID)` block in `my_class.cc`. What should the reviewer suggest?",
+    "choices": [
+      "Fine — keeping every platform in one file makes it easier to find",
+      "Move the Android implementation into `my_class_android.cc`",
+      "Move the Android branch into a lambda to shorten the method",
+      "Replace it with a runtime `if (IsAndroid())` check"
+    ],
+    "answer": 1,
+    "explain": "When an implementation is completely different on one platform, put it in a separate file such as `my_class_android.cc` instead of large `#if` blocks."
+  },
+  {
+    "rule": "CS-033",
+    "prompt": "Which preprocessor check should guard Windows-only code?",
+    "choices": [
+      "`#if defined(WIN32)`, set by the Windows SDK headers",
+      "`#if defined(OS_WIN)`, from `build/build_config.h`",
+      "`#ifdef _MSC_VER`, since Windows builds use MSVC",
+      "`#if BUILDFLAG(IS_WIN)` from `build/build_config.h`"
+    ],
+    "answer": 3,
+    "explain": "Always use the `BUILDFLAG(IS_*)` flags from `build/build_config.h`. Never use compiler macros like `WIN32` or `__APPLE__`, or the removed `defined(OS_*)` form."
+  },
+  {
+    "rule": "CS-034",
+    "prompt": "```cpp\n#if BUILDFLAG(IS_ANDROID)\n  // Don't show notifications\n#endif\n```\n\nThe real reason for suppressing notifications is the user's Do Not Disturb setting, not the platform. What should the reviewer suggest?",
+    "choices": [
+      "Use a feature check such as `if (IsDoNotDisturbEnabled())`",
+      "Extend it to `#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)`",
+      "Move the block into `notifications_android.cc`",
+      "Fine — Android is where Do Not Disturb is used most"
+    ],
+    "answer": 0,
+    "explain": "When behavior depends on a feature rather than the platform, use a feature check instead of a platform check."
+  },
+  {
+    "rule": "CS-035",
+    "prompt": "```cpp\nvoid OnTabContextMenuAction(int action) {\n  if (!base::FeatureList::IsEnabled(kRenamingTabs)) return;\n  model->SetCustomTitle(...);\n}\nvoid TabStripModel::SetCustomTitle(...) {  // private, one caller\n  CHECK(base::FeatureList::IsEnabled(kRenamingTabs));\n  ...\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Fine — a defensive `CHECK` in every helper catches future misuse",
+      "Change the helper's check to `DCHECK` to save the release cost",
+      "Drop the helper's `CHECK`; note the precondition in a comment",
+      "Remove the entry-point check and rely on the helper's `CHECK` instead"
+    ],
+    "answer": 2,
+    "explain": "Check feature flags at entry points only, and comment private helpers. Public APIs called from many places are entry points themselves and keep their own checks."
+  },
+  {
+    "rule": "CS-036",
+    "prompt": "A PR stores whether a feature is enabled for the current profile in a file-level `static bool g_feature_enabled_for_profile;`. Your review?",
+    "choices": [
+      "Fine, as long as every access is guarded by a lock",
+      "Use a profile-keyed service or `UserData` for per-profile state",
+      "Make it `thread_local` so each thread sees its own value",
+      "Wrap it in `base::NoDestructor<bool>` to avoid exit-time destructors"
+    ],
+    "answer": 1,
+    "explain": "Never use static variables for per-profile settings, because static state is shared across every profile and breaks multi-profile scenarios."
+  },
+  {
+    "rule": "CS-037",
+    "prompt": "```cpp\nstd::string api_url = std::getenv(\"BRAVE_API_URL\");\n```\n\nHow should this configuration be provided instead?",
+    "choices": [
+      "Keep `getenv`, but only in `#if !defined(NDEBUG)` builds",
+      "Read it once at startup and cache it in a global",
+      "A local-state pref that developers set by hand",
+      "A GN arg, plus a command-line switch for overrides"
+    ],
+    "answer": 3,
+    "explain": "Configuration comes from GN args, not environment variables. Use command-line switches for runtime overrides."
+  },
+  {
+    "rule": "CS-040",
+    "prompt": "A WebUI file contains `const AdType = { kInline: 0, kPopup: 1 }`, mirroring an enum already defined in a `.mojom` file. Your review?",
+    "choices": [
+      "Use the generated Mojo JS bindings for the enum instead",
+      "Fine — add a `// Keep in sync with ads.mojom` comment",
+      "Add a unit test asserting the JS and mojom values match",
+      "Move the values to a shared JSON file loaded by both C++ and JS"
+    ],
+    "answer": 0,
+    "explain": "When values are defined in Mojo, use the generated bindings in C++, Java and JS. Hand-copied constants drift out of sync."
+  },
+  {
+    "rule": "CS-041",
+    "prompt": "A PR pulls in rapidjson to parse a component's JSON config, citing speed. Your review?",
+    "choices": [
+      "Fine, if a benchmark shows it's faster",
+      "Use `nlohmann::json` instead, for its nicer API",
+      "Use `base::JSONReader` and `JSONWriter`",
+      "Parse it by hand with `std::string::find`"
+    ],
+    "answer": 2,
+    "explain": "Don't use rapidjson. `base::JSONReader` and `base::JSONWriter` are the Chromium standard."
+  },
+  {
+    "rule": "CS-042",
+    "prompt": "```cpp\nif (VLOG_IS_ON(2)) {\n  VLOG(2) << \"Rules: \" << DumpRules();\n}\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Keep it — otherwise `DumpRules()` runs even when logging is off",
+      "Remove the guard; `VLOG` already checks the level",
+      "Change the guard to `if (DCHECK_IS_ON())` to skip release builds",
+      "Change it to `LOG(INFO)` so it always prints"
+    ],
+    "answer": 1,
+    "explain": "`VLOG` does its own level check and won't evaluate inline expressions when the level is disabled, so `VLOG_IS_ON` is redundant. Also make sure each VLOG has a real purpose and isn't left over from debugging."
+  },
+  {
+    "rule": "CS-043",
+    "prompt": "Code in `brave/components/brave_policy/` tags its VLOG messages with a component name. Which name should it use?",
+    "choices": [
+      "A generic `Brave` tag shared by all components",
+      "A descriptive alias such as `AdminSettings`",
+      "The class name, e.g. `BravePolicyServiceImpl`",
+      "The component directory name, `brave_policy`"
+    ],
+    "answer": 3,
+    "explain": "The component name used in VLOG messages should match the component's directory name."
+  },
+  {
+    "rule": "CS-044",
+    "prompt": "```cpp\nif (!ParseFilterList(user_supplied_list)) {\n  LOG(ERROR) << \"Failed to parse filter list\";\n}\n```\n\nA bad user-supplied list is expected now and then and isn't serious. What should the log be?",
+    "choices": [
+      "`VLOG(1)`, or `LOG(WARNING)` if noteworthy",
+      "Keep `LOG(ERROR)` — any parse failure is an error",
+      "A `CHECK` so the bad list gets noticed",
+      "No log at all — silently ignore the failure"
+    ],
+    "answer": 0,
+    "explain": "`LOG(ERROR)` is for truly unexpected, serious failures. For expected or non-critical cases, use `VLOG` for debug info or `LOG(WARNING)` for noteworthy issues."
+  },
+  {
+    "rule": "CS-044",
+    "prompt": "A keyed service has `LOG(ERROR) << \"Failed to load model file\";`. From the diff alone it looks non-critical to you, but you haven't confirmed that. What should you do?",
+    "choices": [
+      "Ask for `VLOG(1)`, since it looks non-critical in the diff",
+      "Ask for `DLOG(ERROR)` so release logs stay clean",
+      "Leave it — you haven't confirmed it's non-critical",
+      "Ask for `LOG(WARNING)` as a middle ground"
+    ],
+    "answer": 2,
+    "explain": "Never suggest lowering log severity for failures you haven't confirmed are non-critical. The developer knows better than a reviewer whether the failure matters to their service."
+  },
+  {
+    "rule": "CS-045",
+    "prompt": "An optional metadata field fails to parse. The feature works fine without it, and the message only helps developers debugging locally. Which log statement fits?",
+    "choices": [
+      "`LOG(ERROR) << \"Failed to parse optional field\";`",
+      "`CHECK(parsed) << \"Failed to parse optional field\";`",
+      "`NOTREACHED() << \"Failed to parse optional field\";`",
+      "`DLOG(ERROR) << \"Failed to parse optional field\";`"
+    ],
+    "answer": 3,
+    "explain": "Use `DLOG(ERROR)` for errors that aren't critical in release builds, so release logs aren't polluted with non-actionable errors."
+  },
+  {
+    "rule": "CS-046",
+    "prompt": "You're adding `GetUrlCosmeticResourcesOnUI()`, which processes filter data on the UI thread and could be slow on large pages. What should you add?",
+    "choices": [
+      "A `VLOG(1)` printing the elapsed time from `base::TimeTicks::Now()`",
+      "A `SCOPED_UMA_HISTOGRAM_TIMER` at the top of the function",
+      "A `base::ElapsedTimer` with a `LOG(INFO)` of the result",
+      "Nothing — profile it locally once before landing"
+    ],
+    "answer": 1,
+    "explain": "Code that processes data on the UI thread or may be slow should use `SCOPED_UMA_HISTOGRAM_TIMER`, so its performance is measured in the field."
+  },
+  {
+    "rule": "CS-047",
+    "prompt": "Three different click handlers each call:\n\n```cpp\nbase::UmaHistogramExactLinear(\"Brave.NTP.CustomizeUsage\", N, 7);\n```\n\nwith a different `N`. What should the reviewer suggest?",
+    "choices": [
+      "Fine — each call site records its own bucket value",
+      "Give each handler its own histogram name for clarity",
+      "Wrap it in one `RecordNTPCustomizeUsage()` helper",
+      "Switch each site to the `UMA_HISTOGRAM_ENUMERATION` macro"
+    ],
+    "answer": 2,
+    "explain": "Emit each histogram from a single location. Wrap it in a helper instead of duplicating the emission across call sites."
+  },
+  {
+    "rule": "CS-048",
+    "prompt": "```cpp\nVLOG(1) << \"Sync seed: \" << sync_seed;\n```\n\nWhat's the right fix?",
+    "choices": [
+      "Don't log the seed; log only that it was set",
+      "Fine — VLOG is off by default in release builds",
+      "Switch to `DVLOG(1)` so it only appears in debug builds",
+      "Log only the first 8 characters of the seed"
+    ],
+    "answer": 0,
+    "explain": "Never log sensitive data such as sync seeds, private keys, tokens or credentials. Even VLOG-level logging can expose it."
+  },
+  {
+    "rule": "CS-049",
+    "prompt": "```cpp\nstruct TestData {\n public:\n  std::string name;\n  int value;\n};\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine — an explicit `public:` documents intent for readers",
+      "Add a `private:` section for `value` to encapsulate it",
+      "Change `public:` to `protected:` for test-only structs",
+      "Remove `public:`, or use `class` for access control"
+    ],
+    "answer": 3,
+    "explain": "Struct members are public by default, so `public:` in a struct is redundant. Remove it, or switch to `class` if you need access control."
+  },
+  {
+    "rule": "CS-050",
+    "prompt": "```cpp\nBraveOriginService* BraveOriginService::GetInstance() {\n  static base::NoDestructor<BraveOriginService> instance;\n  return instance.get();\n}\n```\n\nWhat should the reviewer suggest for this global service?",
+    "choices": [
+      "Fine — `NoDestructor` is the approved Chromium singleton",
+      "Register it in `GlobalFeatures` so tests can reset it",
+      "Use a plain function-local `static BraveOriginService instance;`",
+      "Make it a `KeyedService` attached to the first profile"
+    ],
+    "answer": 1,
+    "explain": "Prefer `GlobalFeatures`, the replacement for `BrowserProcessImpl`, over `base::NoDestructor` for global services. A `NoDestructor` instance can't be reset between tests."
+  },
+  {
+    "rule": "CS-051",
+    "prompt": "`used` is 30 and `total` is 120, both `int`. Which expression gives the correct percentage?",
+    "choices": [
+      "`int pct = (used / total) * 100;`",
+      "`int pct = used / (total * 100);`",
+      "`int pct = (used * 100) / total;`",
+      "`int pct = static_cast<int>(used / total) * 100;`"
+    ],
+    "answer": 2,
+    "explain": "With integer arithmetic, multiply by 100 before dividing. `(used / total) * 100` truncates to 0 whenever `used < total`."
+  },
+  {
+    "rule": "CS-052",
+    "prompt": "```cpp\nDoSomething(base::BindOnce([](int a, int b, int c) {\n  // 20 lines of complex logic...\n}));\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Move it into a named function in the anonymous namespace",
+      "Fine — lambdas keep the logic close to the call site",
+      "Split the lambda into two smaller nested lambdas",
+      "Store the lambda in a named local `auto` variable first"
+    ],
+    "answer": 0,
+    "explain": "When a lambda is complex enough to make the surrounding code hard to read, move it into a named free function in the anonymous namespace."
+  },
+  {
+    "rule": "CS-053",
+    "prompt": "```cpp\nauto elapsed = timer.Elapsed();\nauto weights_opt = base::ReadFileToBytes(weights_path);\n```\n\n`ReadFileToBytes` returns `std::optional<std::vector<uint8_t>>`. What's the right review comment?",
+    "choices": [
+      "Require both to spell out their types before approving",
+      "Both are fine; `auto` is acceptable whenever the initializer is a call",
+      "Flag only `weights_opt`, because complex types must be explicit",
+      "`nit:` spell out `base::TimeDelta`; leave `weights_opt` as `auto`"
+    ],
+    "answer": 3,
+    "explain": "Spell out short, descriptive types like `base::TimeDelta` instead of using `auto` just to save typing. `auto` is fine for verbose types. This is a preference: prefix it with `nit:` and never insist."
+  },
+  {
+    "rule": "CS-054",
+    "prompt": "```cpp\nclass TreeTabNode {\n public:\n  explicit TreeTabNode(TabInterface* tab) : current_tab_(tab) {}\n private:\n  raw_ptr<TabInterface> current_tab_ = nullptr;\n};\n```\n\nThis is the only constructor. What should the reviewer say?",
+    "choices": [
+      "Fine — default member initializers are always required",
+      "Drop the `= nullptr`; the constructor always sets it",
+      "Remove the constructor initializer and keep the default",
+      "Keep both, so the member is safe if a constructor is added"
+    ],
+    "answer": 1,
+    "explain": "Initialize members in their declarations unless every constructor sets them explicitly. Then a default like `= nullptr` suggests a state that never happens."
+  },
+  {
+    "rule": "CS-055",
+    "prompt": "```cpp\nvoid ApiFetch(const std::string& verb, const std::string& url,\n              const base::Value& body_value, Callback cb);\n```\n\n`body_value` is silently ignored for GET and HEAD. Best redesign?",
+    "choices": [
+      "Make `body_value` a `std::optional<base::Value>` defaulting to `std::nullopt`",
+      "Take a `std::variant<GetRequest, PostRequest>` parameter",
+      "Use overloads, e.g. `ApiFetch(url, cb)` and `ApiFetch(url, body, cb)`",
+      "Document in the header that `body_value` is ignored for GET/HEAD"
+    ],
+    "answer": 2,
+    "explain": "Don't make callers pass parameters that are silently ignored. Use overloads, which are also preferred over `std::variant` for distinct call patterns."
+  },
+  {
+    "rule": "CS-056",
+    "prompt": "```cpp\nfor (auto& observer : observers_) {\n  observer.OnPoliciesChanged();\n}\n```\n\nWhat's the preferred form?",
+    "choices": [
+      "`observers_.Notify(&Observer::OnPoliciesChanged);`",
+      "`for (Observer& o : observers_) o.OnPoliciesChanged();`",
+      "`std::ranges::for_each(observers_, &Observer::OnPoliciesChanged);`"
+    ],
+    "answer": 0,
+    "explain": "Use the `observers_.Notify(&Observer::Method)` helper instead of manually iterating observer lists."
+  },
+  {
+    "rule": "CS-057",
+    "prompt": "```cpp\nstd::string script = \"const selectors = [`\" + selector + \"`];\";\nExecuteScript(script);\n```\n\n`selector` comes from page-derived data. What should the reviewer suggest?",
+    "choices": [
+      "Fine — the template-literal backticks quote it safely",
+      "Escape backticks in `selector` before concatenating",
+      "Build the string with `base::StringPrintf` instead of `+`",
+      "Serialize the data with `base::JSONWriter` and embed that"
+    ],
+    "answer": 3,
+    "explain": "When building JavaScript from C++ data, encode it with JSON serialization (`base::JSONWriter`). String concatenation invites injection."
+  },
+  {
+    "rule": "CS-058",
+    "prompt": "A browser test has:\n\n```cpp\nbool result;\nASSERT_TRUE(content::ExecuteScriptAndExtractBool(\n    web_contents, \"domAutomationController.send(someCheck())\", &result));\n```\n\nWhat should it become?",
+    "choices": [
+      "`ExecJs`, reading the result back from `domAutomationController`",
+      "`EXPECT_EQ(true, EvalJs(web_contents, \"someCheck()\"));`",
+      "`ExecuteScriptAndExtractString`, comparing against `\"true\"`",
+      "`ExecuteScript`, then poll a DOM attribute for the result"
+    ],
+    "answer": 1,
+    "explain": "`ExecuteScriptAndExtract*` is deprecated. Use `EvalJs` when you need a result and `ExecJs` when you don't."
+  },
+  {
+    "rule": "CS-059",
+    "prompt": "You have a `content::BrowserContext* browser_context` and need a `Profile*`. Which is correct?",
+    "choices": [
+      "`static_cast<Profile*>(browser_context)`",
+      "`dynamic_cast<Profile*>(browser_context)`, null-checked",
+      "`Profile::FromBrowserContext(browser_context)`",
+      "`reinterpret_cast<Profile*>(browser_context)`"
+    ],
+    "answer": 2,
+    "explain": "Use `Profile::FromBrowserContext()` to convert. Unlike a cast, it includes safety checks."
+  },
+  {
+    "rule": "CS-060",
+    "prompt": "```cpp\nGURL url(user_input);\nloader->DownloadUrl(url);\n```\n\nWhat should the reviewer ask for?",
+    "choices": [
+      "Check `url.is_valid()` and return early if not",
+      "Nothing — `GURL` normalizes and sanitizes any input",
+      "Check `!url.is_empty()` and return early if empty",
+      "Add `CHECK(url.is_valid())` before the download"
+    ],
+    "answer": 0,
+    "explain": "Always check `GURL::is_valid()` before using a constructed URL. Malformed URLs can cause crashes or odd behavior. `CHECK` is wrong for user input."
+  },
+  {
+    "rule": "CS-061",
+    "prompt": "```cpp\nusing MyFeatureTest = testing::Test;\nTEST_F(MyFeatureTest, CrashesOnNull) {\n  EXPECT_DEATH(Process(nullptr), \"\");\n}\n```\n\nWhat should change?",
+    "choices": [
+      "Nothing",
+      "Rename the test case to `DeathCrashesOnNull`",
+      "Use `ASSERT_DEATH` instead of `EXPECT_DEATH`",
+      "Rename the suite to `MyFeatureDeathTest`"
+    ],
+    "answer": 3,
+    "explain": "Death test suite names must end in `DeathTest`. GoogleTest uses that suffix to apply the threading behavior death tests need to work reliably."
+  },
+  {
+    "rule": "CS-063",
+    "prompt": "```cpp\nconst base::TimeDelta kAnimationDuration = base::Milliseconds(200);\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Fine — `const` already makes it a compile-time constant",
+      "Make it `constexpr base::TimeDelta`",
+      "Store `int kAnimationDurationMs = 200` and convert at each use",
+      "Make it a `static const` inside the function that uses it"
+    ],
+    "answer": 1,
+    "explain": "`base::Milliseconds()`, `base::Seconds()` and similar are constexpr-capable, so declare time constants `constexpr base::TimeDelta` to compute them at compile time."
+  },
+  {
+    "rule": "CS-066",
+    "prompt": "A PR leaves this behind \"in case we need it later\":\n\n```cpp\n// #include \"brave/components/old_feature/old_header.h\"\n// void OldMethod() { ... }\n```\n\nYour review?",
+    "choices": [
+      "Fine, with a `TODO` explaining when to restore it",
+      "Wrap it in `#if 0` so editors grey it out clearly",
+      "Delete it — version control history already keeps it",
+      "Move it into an unbuilt `_deprecated.cc` file for reference"
+    ],
+    "answer": 2,
+    "explain": "Don't commit commented-out code, dead includes or development leftovers. They add noise and never get cleaned up, and the history lives in version control."
+  },
+  {
+    "rule": "CS-065",
+    "prompt": "You're removing the AI models `chat-old-model-1` and `chat-old-model-2`. Some users have one of them selected in the `kDefaultModelKey` pref. What else should the PR do?",
+    "choices": [
+      "Add a migration that resets the pref to a sensible default",
+      "Nothing — the UI will just show a blank selection",
+      "Keep the old model entries hidden forever so the prefs stay valid",
+      "Add a `CHECK` that the stored model still exists"
+    ],
+    "answer": 0,
+    "explain": "When removing or renaming a feature, model or pref value that users may have selected, add a migration that resets the pref to a sensible default. Otherwise users are left with a stale, broken value."
+  },
+  {
+    "rule": "CS-068",
+    "prompt": "A PR removes a feature flag and its checks, but leaves behind the helper functions only that feature used, its `.grdp` strings and related constants. Your review?",
+    "choices": [
+      "Fine — unused leftovers are harmless and cost nothing",
+      "Mark the leftovers `[[deprecated]]` for a follow-up PR",
+      "Remove only the strings; the helpers might be reused",
+      "Ask for all of that dead code to be removed in this PR"
+    ],
+    "answer": 3,
+    "explain": "When removing a feature, remove all of its dead code: helpers, orphaned UI strings in `.grdp` files, constants and utilities only the removed code used."
+  },
+  {
+    "rule": "CS-069",
+    "prompt": "A new class inherits from two concrete implementation classes to reuse code from both. What should the reviewer suggest?",
+    "choices": [
+      "Fine — multiple inheritance is allowed in Chromium",
+      "Prefer composition over inheriting from both concrete classes",
+      "Use virtual inheritance to avoid diamond problems",
+      "Ban multiple inheritance entirely, including observer interfaces"
+    ],
+    "answer": 1,
+    "explain": "Chromium permits multiple inheritance but discourages it beyond interface-style patterns. Explore composition before inheriting from several concrete classes."
+  },
+  {
+    "rule": "CS-067",
+    "prompt": "You're investigating a rare crash and want the current `state` string attached to crash reports. What should you use?",
+    "choices": [
+      "`LOG(ERROR) << \"Unexpected state: \" << state;`",
+      "`DVLOG(1) << \"Processing state: \" << state;`",
+      "A `base::debug::ScopedCrashKeyString` for `state`",
+      "`CHECK(false) << state;` so the report includes it"
+    ],
+    "answer": 2,
+    "explain": "For crash diagnostics, use `base::debug::ScopedCrashKeyString`, which attaches data to crash reports without polluting logs. Remove other logging before check-in, and if some must stay, use `DVLOG(1)`."
+  },
+  {
+    "rule": "CS-070",
+    "prompt": "```cpp\n// prefs_registration.h\n#include \"brave/components/containers/core/mojom/containers.mojom.h\"\n\nvoid RegisterProfilePrefs(\n    user_prefs::PrefRegistrySyncable* registry,\n    const std::vector<mojom::ContainerPtr>& default_containers);\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Include `containers.mojom-forward.h` in the header instead",
+      "Nothing — generated mojom types can't be forward-declared",
+      "Hand-write `namespace mojom { class Container; }` in the header",
+      "Move the declaration into the `.mojom` file as an interface method"
+    ],
+    "answer": 0,
+    "explain": "Every mojom target auto-generates a `*.mojom-forward.h`. Use it in headers that only need declarations, which cuts compile time and transitive dependencies, and include the full bindings in the `.cc`."
+  },
+  {
+    "rule": "CS-071",
+    "prompt": "Code that decides whether to grant a capability to a frame does:\n\n```cpp\nurl::Origin origin =\n    url::Origin::Create(render_frame_host->GetLastCommittedURL());\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Fine — it's equivalent to the frame's origin",
+      "Use `url::SchemeHostPort(url)` instead",
+      "Compare `GetLastCommittedURL().host()` against an allowlist",
+      "Use `render_frame_host->GetLastCommittedOrigin()`"
+    ],
+    "answer": 3,
+    "explain": "Make security decisions from `url::Origin`, never a raw `GURL`, and read it from the exact frame with `GetLastCommittedOrigin()`. Converting a `GURL` to an origin often gives the wrong origin."
+  },
+  {
+    "rule": "CS-071",
+    "prompt": "Your shields logic must decide whether to farble in a frame loaded from a `blob:` URL that `https://a.com` embeds. What should the decision be based on?",
+    "choices": [
+      "The origin parsed out of the `blob:` URL string",
+      "`GetLastCommittedOrigin()` on the embedded frame itself",
+      "The top-level frame's last committed URL",
+      "Nothing — `blob:` frames are always exempt from farbling"
+    ],
+    "answer": 1,
+    "explain": "`blob:`, `about:blank` and `about:srcdoc` inherit the embedder's origin, and `GetLastCommittedOrigin()` returns it. Ignoring this let any embedder of a `blob:` URL bypass farbling."
+  },
+  {
+    "rule": "CS-072",
+    "prompt": "Which header guard is correct for `brave/components/foo/bar.h`?",
+    "choices": [
+      "`#pragma once`",
+      "`#ifndef COMPONENTS_FOO_BAR_H_`",
+      "`#ifndef BRAVE_COMPONENTS_FOO_BAR_H_`",
+      "`#ifndef SRC_BRAVE_COMPONENTS_FOO_BAR_H_`"
+    ],
+    "answer": 2,
+    "explain": "`#pragma once` isn't allowed. The guard is the full path from the source root, uppercased, with `/` and `.` replaced by `_`, plus a trailing `_`."
+  },
+  {
+    "rule": "CS-073",
+    "prompt": "You're writing `if (!service) return;` in new code, and you also notice an unbraced single-statement `for` loop in a teammate's PR. What's right?",
+    "choices": [
+      "Brace your own; don't flag the teammate's unbraced loop",
+      "Unbraced single statements are fine everywhere",
+      "Brace yours, and request braces in the teammate's PR",
+      "Only loops need braces; an `if` with a lone `return` doesn't"
+    ],
+    "answer": 0,
+    "explain": "Always brace `if`/`else`/`for`/`while` bodies, even single statements, so an added line can't fall outside the conditional. Never flag missing braces in review, because tooling handles them."
+  },
+  {
+    "rule": "CS-074",
+    "prompt": "A null `profile` here would be a programming bug:\n\n```cpp\nif (!profile) {\n  NOTREACHED();\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Fine — `NOTREACHED()` already states the intent clearly",
+      "Replace it with `DCHECK(profile);` to avoid release cost",
+      "Add a `return;` after `NOTREACHED()` for safety",
+      "Replace it with an unconditional `CHECK(profile);`"
+    ],
+    "answer": 3,
+    "explain": "Prefer an unconditional `CHECK()` over an `if` that conditionally hits `NOTREACHED()`. It's shorter and states the invariant directly."
+  },
+  {
+    "rule": "CS-074",
+    "prompt": "An entry is sometimes missing in the wild and you don't yet know why. You want reports from the field without crashing users. Which code fits?",
+    "choices": [
+      "`CHECK(entry_was_found)` to capture a crash dump",
+      "`base::debug::DumpWithoutCrashing()`, then return",
+      "`base::ImmediateCrash()` when the entry is missing",
+      "`ADD_FAILURE()` when the entry is missing"
+    ],
+    "answer": 1,
+    "explain": "`DumpWithoutCrashing()` uploads a report and keeps running, which suits a failure you're still investigating. `CHECK` is for invariants, `ImmediateCrash` is for when the process must die, and `ADD_FAILURE` belongs in tests."
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "rule": "NA-001",
+    "prompt": "A PR for a new feature adds a custom `my_feature_icon.svg` because no existing icon was a perfect fit. As the reviewer, you:",
+    "choices": [
+      "Approve — an optimized SVG under 1 KB adds negligible weight to the bundle",
+      "Ask to move the SVG into a shared theme folder so every platform can reuse it",
+      "Use or extend the Leo/Nala icon system and tag `@brave/nala-token-reviewers`",
+      "Ask them to inline the SVG markup in the component so no new asset file is added"
+    ],
+    "answer": 2,
+    "explain": "Leo is the canonical icon source on every platform. Bypassing it leads to inconsistency and duplicates, so flag it and tag `@brave/nala-token-reviewers`."
+  },
+  {
+    "rule": "NA-009",
+    "prompt": "An Android feature needs a new icon. Where does it go?",
+    "choices": [
+      "Add the icon entry to `android/nala/icons.gni`",
+      "Create `android/java/res/drawable/ic_my_new_icon.xml`",
+      "Add PNGs to each `drawable-*dpi` folder",
+      "Add it to the `leo_icons` list in `components/vector_icons/BUILD.gn`"
+    ],
+    "answer": 0,
+    "explain": "On Android, add icons to the Nala list in `android/nala/icons.gni` instead of creating new drawable resources."
+  },
+  {
+    "rule": "NA-010",
+    "prompt": "A WebUI page needs an icon that isn't wired up yet. What's the right approach?",
+    "choices": [
+      "Add `my_icon.svg` next to the page and reference it with `<img src=\"my_icon.svg\" />`",
+      "Base64-encode the SVG into a CSS `background-image` on a styled `<span>` wrapper",
+      "Add a new `.icon` file under `components/vector_icons/` and load it via a `chrome://resources` URL",
+      "List it in `leo_icons` in `ui/webui/resources/BUILD.gn`; render `<leo-icon name=\"my-icon-name\">`"
+    ],
+    "answer": 3,
+    "explain": "For WebUI, add the icon name to the `leo_icons` array in `ui/webui/resources/BUILD.gn` and use `<leo-icon>`, not a raw `.svg` file."
+  },
+  {
+    "rule": "NA-011",
+    "prompt": "A C++ Views toolbar button needs a new icon. How should it be added?",
+    "choices": [
+      "Create `components/vector_icons/my_new_icon.icon` containing the vector path commands",
+      "Add `\"my-icon-name\"` to `leo_icons` in `components/vector_icons/BUILD.gn`",
+      "Add `\"my-icon-name\"` to `leo_icons` in `ui/webui/resources/BUILD.gn`",
+      "Rasterize it to PNG at 1x/2x and add it to the theme resources `.grd`"
+    ],
+    "answer": 1,
+    "explain": "For C++ browser UI, add the Leo icon name to `leo_icons` in `components/vector_icons/BUILD.gn` instead of creating a standalone `.icon` file."
+  },
+  {
+    "rule": "NA-002",
+    "prompt": "An Android PR adds this to `res/values/colors.xml`:\n\n```xml\n<color name=\"my_custom_blue\">#1A73E8</color>\n```\n\nWhat should the reviewer say?",
+    "choices": [
+      "Fine, but add a matching night-mode variant in `res/values-night/colors.xml` too",
+      "Rename it with a `brave_` prefix so it can't collide with upstream Chromium's color resource names",
+      "Use a Nala/Leo token like `@color/leo_color_button_background` and tag the Nala token reviewers",
+      "Move the hex value into a Java constant in `BraveColors` so it's defined in one place"
+    ],
+    "answer": 2,
+    "explain": "Don't define new Android color resources, because they bypass the design system and drift across themes and platforms. Reference an existing Nala/Leo token."
+  },
+  {
+    "rule": "NA-005",
+    "prompt": "In a settings WebUI written in React, a teammate creates a `FancyCheckbox` component that wraps a styled `<input type=\"checkbox\">`. Your review?",
+    "choices": [
+      "Replace it with `Checkbox` from `@brave/leo/react/checkbox`",
+      "Fine, as long as its CSS uses Leo color variables",
+      "Fine, if they add the right `aria-*` attributes",
+      "Move `FancyCheckbox` to a shared components folder so others can reuse it"
+    ],
+    "answer": 0,
+    "explain": "In WebUI React, use Leo components instead of native HTML or hand-rolled equivalents. They're themed, accessible and design-approved. Tag `@brave/nala-token-reviewers` when flagging this."
+  },
+  {
+    "rule": "NA-007",
+    "prompt": "Convert this to follow the design system:\n\n```tsx\n<select value={value} onChange={(e) => setValue(e.target.value)}>\n  <option value='a'>Option A</option>\n  <option value='b'>Option B</option>\n</select>\n```",
+    "choices": [
+      "Keep the native `<select>` and style it with Leo CSS variables so it matches the theme",
+      "`<Dropdown value={value} onChange={(e) => setValue(e.target.value)}>` keeping the `<option>` children",
+      "A Leo `<Button>` that toggles a custom popup list of options when clicked",
+      "`<Dropdown value={value} onChange={(e) => setValue(e.detail.value)}>` with `<leo-option>` children"
+    ],
+    "answer": 3,
+    "explain": "Use `Dropdown` from `@brave/leo/react/dropdown` instead of `<select>`. Its children are `<leo-option>` and its events carry the value in `e.detail.value`."
+  },
+  {
+    "rule": "NA-008",
+    "prompt": "A PR adds this component:\n\n```tsx\nfunction Spinner() {\n  return <div className='spinner' aria-label='Loading...' />\n}\n```\n\nWhat should the reviewer suggest?",
+    "choices": [
+      "Fine — it has an `aria-label`, so it's accessible",
+      "Use `ProgressRing` from `@brave/leo/react/progressRing`",
+      "Use `Alert` from `@brave/leo/react/alert`",
+      "Move the spinner CSS into a shared stylesheet so other pages can reuse it"
+    ],
+    "answer": 1,
+    "explain": "Check whether Leo already provides a component before building one. For loading indicators, that's `ProgressRing`. Custom versions add maintenance and are usually less accessible."
+  },
+  {
+    "rule": "NA-012",
+    "prompt": "Reviewing a Views change:\n\n```cpp\n// brave_color_id.h\nBRAVE_COLOR_ID(kColorSidebarPanelBackground)\n// brave_color_mixer.cc\nmixer[kColorSidebarPanelBackground] = {nala::kColorContainerBackground};\n// side_panel_view.cc\nSetBackground(views::CreateThemedSolidBackground(\n    kColorSidebarPanelBackground));\n```",
+    "choices": [
+      "Fine — a Brave color ID decouples the view from Nala so tokens can be swapped later",
+      "Rename it to `kColorBraveSidebarPanelBackground` so Brave-specific IDs are easy to spot",
+      "Drop the intermediate ID; use `nala::kColorContainerBackground` directly at the call site",
+      "Move the mixer assignment into `side_panel_view.cc` so the color lives next to its only use"
+    ],
+    "answer": 2,
+    "explain": "Don't create intermediate `kColor*` tokens that just map to a Nala token. Use the Nala token directly, because the extra indirection hides which token is in use."
+  }
+]

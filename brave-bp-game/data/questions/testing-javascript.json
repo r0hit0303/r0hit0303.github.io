@@ -1,0 +1,50 @@
+[
+  {
+    "rule": "TJ-001",
+    "prompt": "A browser test needs to wait until a `<div id=\"status\">` shows the text `\"Done\"`. Which approach does the standard prefer?",
+    "choices": [
+      "A C++ loop calling `EvalJs` on `innerText` every 10ms until it reads `\"Done\"`",
+      "`EvalJs` a script with `setTimeout(..., 1000)` and then read `#status` text",
+      "Sleep the test thread for a second so rendering settles, then check once",
+      "`EvalJs` a Promise resolved by a `MutationObserver` once the text matches"
+    ],
+    "answer": 3,
+    "explain": "Prefer JavaScript event-driven patterns like `MutationObserver` over C++ polling for DOM changes — they're more deterministic, more efficient, and match Chromium's own pattern (`service_worker_internals_ui_browsertest.cc`)."
+  },
+  {
+    "rule": "TJ-002",
+    "prompt": "A test must wait for `document.getElementById('foo')` to exist. A teammate wrote a C++ loop with `NonBlockingDelay(base::Milliseconds(10))`, an `EvalJs` check, and a 10s deadline that calls `FAIL()`. Is this acceptable?",
+    "choices": [
+      "No — C++ polling loops are never allowed in Brave tests; use JS events instead",
+      "Yes — C++ polling is the fallback when event-driven JS doesn't fit, as here",
+      "No — it should use a fixed sleep instead of a deadline to keep it deterministic",
+      "Yes, but only if the `FAIL()` deadline is removed so the test can't flake"
+    ],
+    "answer": 1,
+    "explain": "Manual C++ polling is the fallback for cases like checking element existence or JS API readiness, where an event-driven JS pattern doesn't apply. Keep the deadline and `FAIL()` on timeout."
+  },
+  {
+    "rule": "TJ-003",
+    "prompt": "Which `EvalJs` call follows the standard for test code inspecting the page?",
+    "choices": [
+      "`content::EvalJs(web_contents, \"...\", EXECUTE_SCRIPT_DEFAULT_OPTIONS, ISOLATED_WORLD_ID_BRAVE_INTERNAL)`",
+      "`content::EvalJs(web_contents, \"document.getElementById('foo')\")` in the page's own main world",
+      "`content::ExecJs(web_contents, \"window.__test = true\")` before every check, then `EvalJs` the result",
+      "`content::EvalJs(web_contents, \"...\", content::EXECUTE_SCRIPT_NO_USER_GESTURE)` for every page check"
+    ],
+    "answer": 0,
+    "explain": "Evaluate test JavaScript in `ISOLATED_WORLD_ID_BRAVE_INTERNAL` so test code doesn't interfere with page scripts."
+  },
+  {
+    "rule": "TJ-004",
+    "prompt": "A Solana provider test does:\n\n```cpp\nWaitForSolanaProviderBinding();\nEXPECT_TRUE(ExecJs(web_contents, \"window.braveSolana.on('connect', ...)\"));\n```\n\nIt flakes with `braveSolana.on is not a function`. Why, and what's the fix?",
+    "choices": [
+      "The binding wait is too short — call `WaitForSolanaProviderBinding()` twice in a row",
+      "`ExecJs` runs before navigation finishes — wrap the call in a `setTimeout` to defer it a bit",
+      "Mojo binds before the event emitter exists — poll until `braveSolana.on` is a function",
+      "The provider is only injected in isolated worlds — run the script in the main world"
+    ],
+    "answer": 2,
+    "explain": "Waiting for the mojo binding doesn't guarantee renderer-side JS setup is done. Poll (with a deadline) until the JS API is actually ready before using it."
+  }
+]
