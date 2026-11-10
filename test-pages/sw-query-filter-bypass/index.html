@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SW query-filter bypass test</title></head>
+<body>
+  <h1>Service Worker query-filter bypass test</h1>
+  <p>SW status: <strong id="status">registering…</strong></p>
+  <ol>
+    <li>Wait until status reads <em>ready</em>.</li>
+    <li>Open DevTools → Console (enable "Preserve log").</li>
+    <li>Navigate to the tracked URL below — click the link, or paste it in the address bar
+        (address-bar navigation is the cleanest repro, since Brave would otherwise strip the params there).</li>
+  </ol>
+  <p><code id="target"></code></p>
+  <p><a id="link">Navigate with fbclid &amp; gclid →</a></p>
+
+  <script>
+    const params = 'fbclid=abcd1234&gclid=wxyz5678&keep=yes';
+    const targetUrl = new URL('./shell.html?' + params, location.href).href;
+    document.getElementById('target').textContent = targetUrl;
+    document.getElementById('link').href = targetUrl;
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => navigator.serviceWorker.ready)
+        .then(() => { document.getElementById('status').textContent = 'ready (active)'; })
+        .catch(err => { document.getElementById('status').textContent = 'failed: ' + err; });
+    } else {
+      document.getElementById('status').textContent = 'service workers unsupported';
+    }
+  </script>
+</body>
+</html>
