@@ -1,14 +1,27 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>SW query-filter bypass test</title></head>
+
+<head>
+  <meta charset="utf-8">
+  <title>SW query-filter bypass test</title>
+</head>
+
 <body>
   <h1>Service Worker query-filter bypass test</h1>
+
+  <h2>General information</h2>
+  <p><code>fbclid</code> and <code>gclid</code> are general tracking parameters that should be
+    removed for all non-same-site navigations.</p>
+  <p>To check the filter works normally, copy and paste the link below in a new tab. The parameters should be scrubbed
+    from the URL that loads:</p>
+  <p>http://brave.com/?fbclid=abcd1234&amp;gclid=wxyz5678</p>
+
+  <h2>Bypass test</h2>
   <p>SW status: <strong id="status">registering…</strong></p>
   <ol>
     <li>Wait until status reads <em>ready</em>.</li>
     <li>Open DevTools → Console (enable "Preserve log").</li>
-    <li>Navigate to the tracked URL below — click the link, or paste it in the address bar
-        (address-bar navigation is the cleanest repro, since Brave would otherwise strip the params there).</li>
+    <li>Navigate to the tracked URL below - copy & paste the link in the address bar.</li>
   </ol>
   <p><code id="target"></code></p>
   <p><a id="link">Navigate with fbclid &amp; gclid →</a></p>
@@ -29,4 +42,5 @@
     }
   </script>
 </body>
+
 </html>
